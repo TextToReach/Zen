@@ -1,0 +1,1 @@
+Or<chumsky::combinator::Map<Just<char, &str, _>, {closure@src/main.rs:11:38: 11:47}, &str>, chumsky::combinator::Map<chumsky::combinator::Map<Then<Just<char, char, _>, TakeUntil<Just<char, char, _>>>, fn((char, (Vec<char>, char))) -> (Vec<char>, char), (char, (Vec<char>, char))>, {closure@src/main.rs:14:14: 14:25}, (Vec<char>, char)>>

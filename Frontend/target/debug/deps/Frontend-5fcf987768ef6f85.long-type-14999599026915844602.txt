@@ -1,0 +1,1 @@
+chumsky::combinator::Map<chumsky::combinator::Map<Then<Just<char, char, _>, TakeUntil<Just<char, char, _>>>, fn((char, (Vec<char>, char))) -> (Vec<char>, char), (char, (Vec<char>, char))>, {closure@src/main.rs:14:14: 14:25}, (Vec<char>, char)>
