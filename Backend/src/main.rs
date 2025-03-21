@@ -1,13 +1,23 @@
 macro_rules! print {
     ($($arg:expr),*) => {
-        let acc = String::from("");
-        $(
-            acc.push
-        )*
+        {
+            let mut result = String::new();
+            let mut _first = true;
+            $(
+                if !_first {
+                    result.push(' ');
+                }
+                result.push_str(&$arg.to_string());
+                _first = false;
+            )*
+
+            // Print the concatenated result
+            println!("{}", result);
+        }
     };
 }
 
 fn main() {
-    println!("Hello, world!");
-    print!("sa", "as");
+    print!("sa", "as", "123");
+    
 }
