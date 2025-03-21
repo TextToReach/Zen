@@ -2,13 +2,13 @@ macro_rules! print {
     ($($arg:expr),*) => {
         {
             let mut result = String::new();
-            let mut first = true;
+            let mut _first = true;
             $(
-                if !first {
+                if !_first {
                     result.push(' ');
                 }
                 result.push_str(&$arg.to_string());
-                first = false;
+                _first = false;
             )*
 
             // Print the concatenated result
@@ -18,5 +18,6 @@ macro_rules! print {
 }
 
 fn main() {
-    print!("sa", "as");
+    print!("sa", "as", "123");
+    
 }
