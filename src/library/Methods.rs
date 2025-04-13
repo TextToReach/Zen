@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use std::{clone, process::exit};
 
 use super::Types::ZenError;
@@ -39,6 +41,17 @@ macro_rules! Debug {
 
         println!("{}", acc.join(" "));
     };
+}
+
+#[macro_export]
+macro_rules! ReadFile {
+    ($path:expr) => {{
+        use std::fs;
+        match fs::read_to_string($path) {
+            Ok(content) => content,
+            Err(e) => panic!("Dosya okunamadı gardaş! Hata: {}", e),
+        }
+    }};
 }
 
 #[macro_export]

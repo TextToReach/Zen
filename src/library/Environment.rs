@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use std::collections::HashMap;
 use crate::library::{Methods::{Str, Throw}, Types::ZenError};
 use super::Types::ZenType;

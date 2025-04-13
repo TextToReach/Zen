@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use std::{fmt::Display, ops::{Div, Index}};
 use num::abs;
 
@@ -122,7 +124,7 @@ impl Get<'_> {
     }
 
     pub fn splice(&mut self, start: i32, amount: i32) -> Vec<ZenType>{
-
+        todo!()
     }
 }
 // ------------------------------------------ Traits ------------------------------------------
