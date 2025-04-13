@@ -1,6 +1,9 @@
 #![allow(non_snake_case)]
 
-use super::Array;
+use chumsky::{error::Simple, Parser};
+use chumsky::prelude::*;
+
+use super::Array::Array;
 use std::{
     fmt::Display,
     num::{ParseFloatError, ParseIntError},
@@ -16,8 +19,8 @@ use std::{
 pub enum ZenType {
     Number(Number),
     Text(Text),
-    Array(Array::Array),
-    Bool(Bool),
+    Array(Array),
+    Bool(Boolean),
 }
 
 #[derive(Debug, Clone)]
@@ -36,8 +39,20 @@ pub enum ZenError {
 // ------------------------------------------ Traits ------------------------------------------
 
 pub trait New<T> {
-    fn new_enum(value: T) -> ZenType;
-    fn new(value: T) -> Self;
+    /// Converts value T to corresponding ZenType.
+    /// Has the exact same purpose as ZenType::from
+    /// ZenType::from -> ZenType (T)
+    /// T::enum_from -> ZenType (T)
+    fn enum_from(value: T) -> ZenType;
+    fn new() -> Self;
+}
+
+pub trait Parsable<'a, I, O, E>
+where
+    I: 'a + Clone,
+    E: chumsky::error::Error<I> + 'a,
+{
+    fn parser() -> Box<dyn Parser<I, O, Error = E> + 'a>;
 }
 
 // ------------------------------------------ Structs ------------------------------------------
@@ -53,7 +68,7 @@ pub struct Text {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Bool {
+pub struct Boolean {
     pub value: bool,
 }
 
@@ -63,7 +78,82 @@ pub struct Function {
     // TODO: After adding zenvm functionality, complete this part.
 }
 
-// ------------------------------------------ Implements ------------------------------------------
+// ------------------------------------------ Parser Implements ------------------------------------------
+
+impl<'a> Parsable<'a, char, ZenType, Simple<char>> for Number {
+   fn parser() -> Box<dyn Parser<char, ZenType, Error = Simple<char>> + 'a> {
+        Box::new(
+            just("-")
+                .or_not()
+                .then(text::int::<_, Simple<char>>(10))
+                .then(just('.').ignore_then(text::digits(10)).or_not())
+                .map(|((negative, int), frac)| {
+                    ZenType::from(format!("{}{}.{}", negative.unwrap_or("+"), int, frac.unwrap_or("0".to_owned())).parse::<f64>().unwrap())
+                })
+                .padded()
+        )
+    }
+}
+
+impl<'a> Parsable<'a, char, ZenType, Simple<char>> for Text {
+   fn parser() -> Box<dyn Parser<char, ZenType, Error = Simple<char>> + 'a> {
+        let single_quoted = just('\'') // Tek tırnakla başla
+            .ignore_then(filter(|c| *c != '\'').repeated()) // Tek tırnak bitene kadar karakterleri al
+            .then_ignore(just('\'')) // Tek tırnakla bitir
+            .collect::<String>(); // Karakterleri string'e çevir
+
+        let double_quoted = just('"') // Çift tırnakla başla
+            .ignore_then(filter(|c| *c != '"').repeated()) // Çift tırnak bitene kadar karakterleri al
+            .then_ignore(just('"')) // Çift tırnakla bitir
+            .collect::<String>(); // Karakterleri string'e çevir
+
+        Box::new(single_quoted.or(double_quoted).map(ZenType::from))
+    }
+}
+
+impl<'a> Parsable<'a, char, ZenType, Simple<char>> for Boolean {
+   fn parser() -> Box<dyn Parser<char, ZenType, Error = Simple<char>> + 'a> {
+        Box::new(
+            just("true")
+                .to(ZenType::from(true))
+                .or(just("false").to(ZenType::from(false)))
+
+        )
+    }
+}
+
+// ------------------------------------------ Trait Implements ------------------------------------------
+
+impl From<f64> for ZenType {
+    fn from(value: f64) -> Self {
+        ZenType::Number(Number::from(value)) 
+    }
+}
+
+impl From<String> for ZenType {
+    fn from(value: String) -> Self {
+        ZenType::Text(Text::from(value)) 
+    }
+}
+
+impl From<&str> for ZenType {
+    fn from(value: &str) -> Self {
+        ZenType::Text(Text::from(value.to_owned())) 
+    }
+}
+
+impl From<bool> for ZenType {
+    fn from(value: bool) -> Self {
+        ZenType::Bool(Boolean::from(value)) 
+    }
+}
+
+impl From<Vec<ZenType>> for ZenType {
+    fn from(value: Vec<ZenType>) -> Self {
+        ZenType::Array(Array::from(value)) 
+    }
+}
+
 
 impl From<f64> for Number {
     fn from(value: f64) -> Self {
@@ -72,6 +162,11 @@ impl From<f64> for Number {
 }
 impl From<String> for Text {
     fn from(value: String) -> Self {
+        Self { value }
+    }
+}
+impl From<bool> for Boolean {
+    fn from(value: bool) -> Self {
         Self { value }
     }
 }
@@ -86,6 +181,11 @@ impl Into<String> for Text {
         self.value
     }
 }
+impl Into<bool> for Boolean {
+    fn into(self) -> bool {
+        self.value
+    }
+}
 
 impl FromStr for Number {
     type Err = ParseFloatError;
@@ -96,31 +196,31 @@ impl FromStr for Number {
 }
 
 impl New<f64> for Number {
-    fn new_enum(value: f64) -> ZenType {
+    fn enum_from(value: f64) -> ZenType {
         ZenType::Number(Self { value })
     }
 
-    fn new(value: f64) -> Self {
-        Self { value }
+    fn new() -> Self {
+        Self { value: 0f64 }
     }
 }
 impl New<String> for Text {
-    fn new_enum(value: String) -> ZenType {
+    fn enum_from(value: String) -> ZenType {
         ZenType::Text(Self { value })
     }
 
-    fn new(value: String) -> Self {
-        Self { value }
+    fn new() -> Self {
+        Self { value: "".to_owned() }
     }
 }
 
-impl New<bool> for Bool {
-    fn new_enum(value: bool) -> ZenType {
+impl New<bool> for Boolean {
+    fn enum_from(value: bool) -> ZenType {
         ZenType::Bool(Self { value })
     }
 
-    fn new(value: bool) -> Self {
-        Self { value }
+    fn new() -> Self {
+        Self { value: false }
     }
 }
 
@@ -142,7 +242,7 @@ impl Display for Text {
     }
 }
 
-impl Display for Bool {
+impl Display for Boolean {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }

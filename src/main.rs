@@ -3,15 +3,16 @@ mod parsers;
 
 use chumsky::error::Cheap;
 use chumsky::prelude::*;
-use chumsky::Parser;
-use parsers::{instructions, number, string};
+use library::Types::{Boolean, Number, Parsable, Text};
+use parsers::instructions;
 
 fn main() {
     let input = Input!("Enter something to parse: ");
     let lexer = choice((
         instructions::yazdir::parser(),
-        number::parser(),
-        string::parser()
+        Number::parser(),
+        Text::parser(),
+        Boolean::parser(),
     ));
 
     match lexer.parse(input) {

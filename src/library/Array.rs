@@ -142,12 +142,12 @@ impl From<Array> for Vec<ZenType> {
 }
 
 impl New<Vec<ZenType>> for Array {
-    fn new_enum(value: Vec<ZenType>) -> ZenType {
+    fn enum_from(value: Vec<ZenType>) -> ZenType {
         ZenType::Array(Self { value })
     }
 
-    fn new(value: Vec<ZenType>) -> Self {
-        Self { value }
+    fn new() -> Self {
+        Self { value: vec![] }
     }
 }
 
