@@ -26,6 +26,25 @@ macro_rules! Print {
 }
 
 #[macro_export]
+macro_rules! PrintVec {
+    () => {
+        println!();
+    };
+
+    ($($arg:expr),*) => {
+        let mut acc: Vec<String> = Vec::new();
+
+        $(
+            for x in $arg {
+                acc.push(format!("{}", x));
+            }
+        )*
+
+        println!("{}", acc.join(" "));
+    };
+}
+
+#[macro_export]
 macro_rules! Debug {
     () => {
         println!();
