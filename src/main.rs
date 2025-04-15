@@ -1,7 +1,6 @@
 mod library;
 mod parsers;
 
-use chumsky::error::Cheap;
 use chumsky::prelude::*;
 use library::Types::{Boolean, Number, Parsable, Text};
 use parsers::instructions;

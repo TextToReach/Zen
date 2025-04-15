@@ -1,6 +1,5 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, dead_code)]
 
-use std::{clone, process::exit};
 
 use super::Types::ZenError;
 use colored::Colorize;

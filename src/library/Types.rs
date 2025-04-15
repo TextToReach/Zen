@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, dead_code)]
 
 use chumsky::{error::Simple, Parser};
 use chumsky::prelude::*;
@@ -6,7 +6,7 @@ use chumsky::prelude::*;
 use super::Array::Array;
 use std::{
     fmt::Display,
-    num::{ParseFloatError, ParseIntError},
+    num::ParseFloatError,
     str::FromStr,
 };
 
@@ -70,6 +70,15 @@ pub struct Text {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Boolean {
     pub value: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Object {
+
+}
+
+impl Object {
+
 }
 
 #[derive(Debug, Clone)]

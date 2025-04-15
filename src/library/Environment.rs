@@ -1,7 +1,7 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, dead_code)]
 
 use std::collections::HashMap;
-use crate::library::{Methods::{Str, Throw}, Types::ZenError};
+use crate::library::{Methods::Throw, Types::ZenError};
 use super::Types::ZenType;
 
 #[derive(Clone)]

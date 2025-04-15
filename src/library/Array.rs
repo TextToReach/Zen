@@ -1,9 +1,8 @@
 #![allow(non_snake_case)]
 
-use std::{fmt::Display, ops::{Div, Index}};
-use num::abs;
+use std::fmt::Display;
 
-use super::Types::{self, New, Number, ZenType};
+use super::Types::{New, ZenType};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Array {
@@ -123,7 +122,7 @@ impl Get<'_> {
         result
     }
 
-    pub fn splice(&mut self, start: i32, amount: i32) -> Vec<ZenType>{
+    pub fn splice(&mut self, _start: i32, _amount: i32) -> Vec<ZenType>{
         todo!()
     }
 }

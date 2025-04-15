@@ -1,14 +1,12 @@
 use chumsky::prelude::*;
 
-use crate::{library::{
-    Array::Array,
-    Types::{New, Text, ZenType},
-}, parsers::text};
+use crate::library::
+    Types::{Parsable, Text, ZenType};
 
 pub fn parser() -> impl Parser<char, ZenType, Error = Simple<char>> {
     just("yazdır")
         .padded()
-        .ignore_then(text::parser().separated_by(just(' ')).at_least(1))
+        .ignore_then(Text::parser().separated_by(just(' ')).at_least(1))
         .map(ZenType::from)
 
 
