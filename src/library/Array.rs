@@ -2,11 +2,11 @@
 
 use std::fmt::Display;
 
-use super::Types::{New, ZenType};
+use super::Types::{New, Object};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Array {
-    pub value: Vec<ZenType>,
+    pub value: Vec<Object>,
 }
 
 impl Array {
@@ -23,7 +23,7 @@ impl Array {
     pub fn print(&mut self) {
         let mut log = Vec::new();
         for item in &self.value {
-            if let ZenType::Number(num) = item {
+            if let Object::Number(num) = item {
                log.push(num.value.to_string()); 
             }
         }
@@ -45,11 +45,11 @@ where T: Into<isize>, {
 
 pub struct Push<'a> { pub parent: &'a mut Array }
 impl Push<'_> {
-    pub fn toEnd(&mut self, new_element: ZenType) {
+    pub fn toEnd(&mut self, new_element: Object) {
         self.parent.value.push(new_element);
     }
 
-    pub fn toStart(&mut self, new_element: ZenType) {
+    pub fn toStart(&mut self, new_element: Object) {
         self.parent.value.insert(0, new_element);
     }
 }
@@ -63,7 +63,7 @@ impl Remove<'_> {
         self.parent.value.remove(real_index as usize);
     }
 
-    pub fn byItem(&mut self, element: ZenType) {
+    pub fn byItem(&mut self, element: Object) {
         if let Some(pos) = self.parent.value.iter().position(|x| *x == element) {
             Self::byIndex(self, pos as isize as i32);
         }
@@ -88,11 +88,11 @@ impl Get<'_> {
         self.parent.value.len()
     }
 
-    pub fn indexOf(&mut self, element: ZenType) -> Option<usize> {
+    pub fn indexOf(&mut self, element: Object) -> Option<usize> {
         self.parent.value.iter().position(|x| *x == element)
     }
     
-    pub fn atIndex(&mut self, index: i32) -> Option<ZenType> {
+    pub fn atIndex(&mut self, index: i32) -> Option<Object> {
         let real_index = RealIndex(index as isize, self.parent.value.len() as isize);
         for (i, item) in self.parent.value.iter().enumerate() {
             if i == real_index {
@@ -104,7 +104,7 @@ impl Get<'_> {
 
     }
 
-    pub fn between(&mut self, start: i32, end: i32) -> Vec<ZenType>{
+    pub fn between(&mut self, start: i32, end: i32) -> Vec<Object>{
         let mut result = Vec::with_capacity((end - start) as usize);
         let mut inner_start = start;
         let mut inner_end = end;
@@ -122,27 +122,27 @@ impl Get<'_> {
         result
     }
 
-    pub fn splice(&mut self, _start: i32, _amount: i32) -> Vec<ZenType>{
+    pub fn splice(&mut self, _start: i32, _amount: i32) -> Vec<Object>{
         todo!()
     }
 }
 // ------------------------------------------ Traits ------------------------------------------
 
-impl From<Vec<ZenType>> for Array {
-    fn from(value: Vec<ZenType>) -> Self {
+impl From<Vec<Object>> for Array {
+    fn from(value: Vec<Object>) -> Self {
         Self { value }
     }
 }
 
-impl From<Array> for Vec<ZenType> {
+impl From<Array> for Vec<Object> {
     fn from(val: Array) -> Self {
         val.value
     }
 }
 
-impl New<Vec<ZenType>> for Array {
-    fn enum_from(value: Vec<ZenType>) -> ZenType {
-        ZenType::Array(Self { value })
+impl New<Vec<Object>> for Array {
+    fn enum_from(value: Vec<Object>) -> Object {
+        Object::Array(Self { value })
     }
 
     fn new() -> Self {

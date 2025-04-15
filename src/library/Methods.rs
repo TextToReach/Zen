@@ -48,7 +48,7 @@ macro_rules! ReadFile {
         use std::fs;
         match fs::read_to_string($path) {
             Ok(content) => content,
-            Err(e) => panic!("Dosya okunamadı gardaş! Hata: {}", e),
+            Err(e) => panic!("Dosya okunurken bir hata oluştu! Hata: {}", e),
         }
     }};
 }

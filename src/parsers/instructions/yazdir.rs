@@ -1,13 +1,14 @@
+#![allow(non_snake_case, dead_code)]
+
 use chumsky::prelude::*;
 
-use crate::library::
-    Types::{Parsable, Text, ZenType};
+use crate::library::Types::Object;
 
-pub fn parser() -> impl Parser<char, ZenType, Error = Simple<char>> {
-    just("yazdır")
+pub fn parser() -> Box<impl Parser<char, Object, Error = Simple<char>>> {
+    Box::new(just("yazdır")
         .padded()
-        .ignore_then(Text::parser().separated_by(just(' ')).at_least(1))
-        .map(ZenType::from)
+        .ignore_then(Object::parser().separated_by(just(' ')).at_least(1))
+        .map(Object::from))
 
 
     // just("yazdır")

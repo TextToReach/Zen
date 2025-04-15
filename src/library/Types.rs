@@ -13,10 +13,10 @@ use std::{
 /// Exact eq's:
 /// - Number = f64
 /// - Text = String
-/// - Array = Vec<_>
+/// - Array = Vec<Object>
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ZenType {
+pub enum Object {
     Number(Number),
     Text(Text),
     Array(Array),
@@ -26,7 +26,7 @@ pub enum ZenType {
 #[derive(Debug, Clone)]
 pub struct ZenNamedParameter {
     name: String,
-    value: ZenType,
+    value: Object,
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +43,7 @@ pub trait New<T> {
     /// Has the exact same purpose as ZenType::from
     /// ZenType::from -> ZenType (T)
     /// T::enum_from -> ZenType (T)
-    fn enum_from(value: T) -> ZenType;
+    fn enum_from(value: T) -> Object;
     fn new() -> Self;
 }
 
@@ -72,15 +72,6 @@ pub struct Boolean {
     pub value: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Object {
-
-}
-
-impl Object {
-
-}
-
 #[derive(Debug, Clone)]
 pub struct Function {
     pub parameters: Vec<ZenNamedParameter>,
@@ -89,23 +80,23 @@ pub struct Function {
 
 // ------------------------------------------ Parser Implements ------------------------------------------
 
-impl<'a> Parsable<'a, char, ZenType, Simple<char>> for Number {
-   fn parser() -> Box<dyn Parser<char, ZenType, Error = Simple<char>> + 'a> {
+impl<'a> Parsable<'a, char, Object, Simple<char>> for Number {
+   fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         Box::new(
             just("-")
                 .or_not()
                 .then(text::int::<_, Simple<char>>(10))
                 .then(just('.').ignore_then(text::digits(10)).or_not())
                 .map(|((negative, int), frac)| {
-                    ZenType::from(format!("{}{}.{}", negative.unwrap_or("+"), int, frac.unwrap_or("0".to_owned())).parse::<f64>().unwrap())
+                    Object::from(format!("{}{}.{}", negative.unwrap_or("+"), int, frac.unwrap_or("0".to_owned())).parse::<f64>().unwrap())
                 })
                 .padded()
         )
     }
 }
 
-impl<'a> Parsable<'a, char, ZenType, Simple<char>> for Text {
-   fn parser() -> Box<dyn Parser<char, ZenType, Error = Simple<char>> + 'a> {
+impl<'a> Parsable<'a, char, Object, Simple<char>> for Text {
+   fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         let single_quoted = just('\'') // Tek tırnakla başla
             .ignore_then(filter(|c| *c != '\'').repeated()) // Tek tırnak bitene kadar karakterleri al
             .then_ignore(just('\'')) // Tek tırnakla bitir
@@ -116,50 +107,58 @@ impl<'a> Parsable<'a, char, ZenType, Simple<char>> for Text {
             .then_ignore(just('"')) // Çift tırnakla bitir
             .collect::<String>(); // Karakterleri string'e çevir
 
-        Box::new(single_quoted.or(double_quoted).map(ZenType::from))
+        Box::new(single_quoted.or(double_quoted).map(Object::from))
     }
 }
 
-impl<'a> Parsable<'a, char, ZenType, Simple<char>> for Boolean {
-   fn parser() -> Box<dyn Parser<char, ZenType, Error = Simple<char>> + 'a> {
+impl<'a> Parsable<'a, char, Object, Simple<char>> for Boolean {
+   fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         Box::new(
-            just("true")
-                .to(ZenType::from(true))
-                .or(just("false").to(ZenType::from(false)))
-
+            choice([just("true"), just("doğru")]).to(Object::from(true))
+            .or(choice([just("false"), just("yanlış")]).to(Object::from(false)))
         )
+    }
+}
+
+impl Object {
+    pub fn parser<'a>() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+        Box::new(choice([
+            Number::parser(),
+            Text::parser(),
+            Boolean::parser()
+        ]))
     }
 }
 
 // ------------------------------------------ Trait Implements ------------------------------------------
 
-impl From<f64> for ZenType {
+impl From<f64> for Object {
     fn from(value: f64) -> Self {
-        ZenType::Number(Number::from(value)) 
+        Object::Number(Number::from(value)) 
     }
 }
 
-impl From<String> for ZenType {
+impl From<String> for Object {
     fn from(value: String) -> Self {
-        ZenType::Text(Text::from(value)) 
+        Object::Text(Text::from(value)) 
     }
 }
 
-impl From<&str> for ZenType {
+impl From<&str> for Object {
     fn from(value: &str) -> Self {
-        ZenType::Text(Text::from(value.to_owned())) 
+        Object::Text(Text::from(value.to_owned())) 
     }
 }
 
-impl From<bool> for ZenType {
+impl From<bool> for Object {
     fn from(value: bool) -> Self {
-        ZenType::Bool(Boolean::from(value)) 
+        Object::Bool(Boolean::from(value)) 
     }
 }
 
-impl From<Vec<ZenType>> for ZenType {
-    fn from(value: Vec<ZenType>) -> Self {
-        ZenType::Array(Array::from(value)) 
+impl From<Vec<Object>> for Object {
+    fn from(value: Vec<Object>) -> Self {
+        Object::Array(Array::from(value)) 
     }
 }
 
@@ -205,8 +204,8 @@ impl FromStr for Number {
 }
 
 impl New<f64> for Number {
-    fn enum_from(value: f64) -> ZenType {
-        ZenType::Number(Self { value })
+    fn enum_from(value: f64) -> Object {
+        Object::Number(Self { value })
     }
 
     fn new() -> Self {
@@ -214,8 +213,8 @@ impl New<f64> for Number {
     }
 }
 impl New<String> for Text {
-    fn enum_from(value: String) -> ZenType {
-        ZenType::Text(Self { value })
+    fn enum_from(value: String) -> Object {
+        Object::Text(Self { value })
     }
 
     fn new() -> Self {
@@ -224,8 +223,8 @@ impl New<String> for Text {
 }
 
 impl New<bool> for Boolean {
-    fn enum_from(value: bool) -> ZenType {
-        ZenType::Bool(Self { value })
+    fn enum_from(value: bool) -> Object {
+        Object::Bool(Self { value })
     }
 
     fn new() -> Self {
@@ -233,7 +232,7 @@ impl New<bool> for Boolean {
     }
 }
 
-impl Display for ZenType {
+impl Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
