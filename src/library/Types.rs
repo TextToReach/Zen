@@ -3,6 +3,8 @@
 use chumsky::{error::Simple, Parser};
 use chumsky::prelude::*;
 
+use crate::parsers::instructions::Kit::InstructionEnum;
+
 use super::Array::Array;
 use std::{
     fmt::Display,
@@ -25,7 +27,7 @@ pub enum Object {
 
 /// Fill fields on demand. No need to fill al fields. See: forloop1.rs
 #[derive(Debug, Clone, PartialEq)]
-pub struct Instruction(pub String, pub Vec<Object>, pub Vec<Instruction>);
+pub struct Instruction(pub InstructionEnum, pub Vec<Object>, pub Vec<Instruction>);
 
 #[derive(Debug, Clone)]
 pub struct ZenNamedParameter {

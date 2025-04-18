@@ -1,2 +1,5 @@
 10 defa tekrarla
-	yazdır "sa"
+	yazdır "selam"
+	20 defa yazdır
+		yazdır "merhaba"
+

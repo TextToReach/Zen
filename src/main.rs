@@ -5,7 +5,7 @@ use std::{fs::File, io::Read};
 
 use chumsky::{prelude::*, primitive::Choice, Parser};
 use library::{Methods::Throw, Types::{Instruction, Object}};
-use parsers::instructions::{yazdir, Kit};
+use parsers::instructions::{yazdir, Kit::{self, InstructionEnum}};
 use clap::{Parser as ClapParser, Subcommand};
 
 /// Ana CLI aracı
@@ -37,18 +37,18 @@ enum Commands {
 } */ 
 
 fn process(AST: Instruction){
-    let instruction = AST.0.as_str();
-    let argobj = AST.1;
-    let argins = AST.2;
-    match instruction {
-        "yazdır" => {
-            PrintVec!(argobj);
+    let InstructionVariant = AST.0;
+    let ArgumentObjects = AST.1;
+    let ArgumentInstructions = AST.2;
+    
+    match InstructionVariant {
+        InstructionEnum::Yazdır => {
+            PrintVec!(ArgumentObjects);
         }
-        "repeat" => {
-            println!("shit hell");
-            if let Object::Number(c) = argobj[0]{
-                for i in 0..c.value.floor() as i64 { // left here - got stack overflow error
-                    process(ins);
+        InstructionEnum::Forloop1 => {
+            if let Object::Number(RepeatCount) = ArgumentObjects.clone().first().unwrap(){
+                for index in 0..RepeatCount.value.floor() as i64 {
+                    process(ArgumentInstructions.get(index as usize).unwrap().clone());
                 }
             }
         }
@@ -70,12 +70,10 @@ fn run(file: String, verbose: bool) {
         Err(_) => {Throw("Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None); String::from("")}
     };
 
-    match Kit::parser().repeated().parse(input.clone()) {
+    match Kit::parser().parse(input.clone()) {
         Ok(results) => {
             println!("AST: {:#?}\n\n", results);
-            for result in results {
-                process(result);
-            }
+            process(results);
         },
         Err(errors) => {
             for error in errors {
