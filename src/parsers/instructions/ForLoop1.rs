@@ -2,18 +2,11 @@
 
 use chumsky::prelude::*;
 
-use crate::{
-    library::Types::{Instruction, Number, Object, Parsable},
-    parsers::instructions::Kit::InstructionEnum,
-};
+use crate::library::Types::{Instruction, Number, Object, Parsable, InstructionEnum};
 
-use super::Kit;
+use super::Kit::{self, newline, whitespace};
 
 // n defa tekrarla
-
-pub fn whitespace() -> impl Parser<char, char, Error = Simple<char>> {
-    filter(|c: &char| c.is_whitespace() && *c != '\n')
-}
 
 pub fn parser(
     instr_parser: impl Parser<char, Instruction, Error = Simple<char>> + Clone + 'static,
@@ -21,15 +14,14 @@ pub fn parser(
     Box::new(
         Number::parser() // 10
             .then_ignore(whitespace()) // space
-            .then_ignore(just("defa").or(just("kere")))
+            .then_ignore(just("defa").or(just("kere")).or(just("kez")))
             .then_ignore(whitespace())
             .then_ignore(just("tekrarla"))
             .then_ignore(just("\n"))
             .then(
-                just('\t').ignore_then(instr_parser.clone()).separated_by(just("\n"))
+                just('\t').ignore_then(instr_parser.clone()).separated_by(newline())
             ).map(|(a, b)| {
-                println!("Ins: {:?}", b);
-                Instruction(InstructionEnum::Forloop1, vec![a], b)
+                Instruction(InstructionEnum::Forloop1(a.asNumber().value.floor() as i64, b))
             })
     )
 }

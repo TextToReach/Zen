@@ -1,6 +1,8 @@
 #![allow(non_snake_case, dead_code)]
 
 
+use std::process::exit;
+
 use super::Types::ZenError;
 use colored::Colorize;
 
@@ -135,4 +137,6 @@ pub fn Throw(
         line = format!("Dosya: {}", if let Some(FileAndLine) = file_and_line.clone() { FileAndLine.1.to_string() } else { "Bilinmiyor".to_string() }).cyan(),
         desc = description
     );
+
+    exit(1);
 }

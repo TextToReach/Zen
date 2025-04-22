@@ -1,5 +1,7 @@
-10 defa tekrarla
-	yazdır "selam"
-	20 defa yazdır
-		yazdır "merhaba"
+a = 10
+10 kere tekrarla
+	b = a
+	yazdır b
 
+10 kere tekrarla
+	yazdır a

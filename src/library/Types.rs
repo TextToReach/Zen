@@ -1,16 +1,10 @@
 #![allow(non_snake_case, dead_code)]
 
-use chumsky::{error::Simple, Parser};
 use chumsky::prelude::*;
-
-use crate::parsers::instructions::Kit::InstructionEnum;
+use chumsky::{Parser, error::Simple};
 
 use super::Array::Array;
-use std::{
-    fmt::Display,
-    num::ParseFloatError,
-    str::FromStr,
-};
+use std::{fmt::Display, num::ParseFloatError, str::FromStr};
 
 /// Exact eq's:
 /// - Number = f64
@@ -22,12 +16,56 @@ pub enum Object {
     Number(Number),
     Text(Text),
     Array(Array),
-    Bool(Boolean)
+    Bool(Boolean),
+    Variable(String),
+    Nil
+}
+
+impl Object {
+    pub fn asNumber(self) -> Number {
+        if let Object::Number(val) = self {
+            val
+        } else {
+            panic!("Error while trying to convert Object to Number: Object is not a number.")
+        }
+    }
+
+    pub fn asText(self) -> Text {
+        if let Object::Text(val) = self {
+            val
+        } else {
+            panic!("Error while trying to convert Object to Text: Object is not a text.")
+        }
+    }
+
+    pub fn asArray(self) -> Array {
+        if let Object::Array(val) = self {
+            val
+        } else {
+            panic!("Error while trying to convert Object to Array: Object is not an array.")
+        }
+    }
+
+    pub fn asBool(self) -> Boolean {
+        if let Object::Bool(val) = self {
+            val
+        } else {
+            panic!("Error while trying to convert Object to Bool: Object is not a bool.")
+        }
+    }
+
+    pub fn asVariable(self) -> String {
+        if let Object::Variable(val) = self {
+            val
+        } else {
+            panic!("Error while trying to convert Object to Variable: Object is not a variable.")
+        }
+    }
 }
 
 /// Fill fields on demand. No need to fill al fields. See: forloop1.rs
 #[derive(Debug, Clone, PartialEq)]
-pub struct Instruction(pub InstructionEnum, pub Vec<Object>, pub Vec<Instruction>);
+pub struct Instruction(pub InstructionEnum);
 
 #[derive(Debug, Clone)]
 pub struct ZenNamedParameter {
@@ -40,6 +78,14 @@ pub enum ZenError {
     UnknownError,
     GeneralError,
     NotDeclaredError,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InstructionEnum {
+    NoOp,
+    Yazdır(Vec<Object>),
+    Forloop1(i64, Vec<Instruction>),
+    VariableDeclaration(String, Object),
 }
 
 // ------------------------------------------ Traits ------------------------------------------
@@ -87,21 +133,30 @@ pub struct Function {
 // ------------------------------------------ Parser Implements ------------------------------------------
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Number {
-   fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         Box::new(
             just("-")
                 .or_not()
                 .then(text::int::<_, Simple<char>>(10))
                 .then(just('.').ignore_then(text::digits(10)).or_not())
                 .map(|((negative, int), frac)| {
-                    Object::from(format!("{}{}.{}", negative.unwrap_or("+"), int, frac.unwrap_or("0".to_owned())).parse::<f64>().unwrap())
-                })
+                    Object::from(
+                        format!(
+                            "{}{}.{}",
+                            negative.unwrap_or("+"),
+                            int,
+                            frac.unwrap_or("0".to_owned())
+                        )
+                        .parse::<f64>()
+                        .unwrap(),
+                    )
+                }),
         )
     }
 }
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Text {
-   fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         let single_quoted = just('\'') // Tek tırnakla başla
             .ignore_then(filter(|c| *c != '\'').repeated()) // Tek tırnak bitene kadar karakterleri al
             .then_ignore(just('\'')) // Tek tırnakla bitir
@@ -117,10 +172,11 @@ impl<'a> Parsable<'a, char, Object, Simple<char>> for Text {
 }
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Boolean {
-   fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         Box::new(
-            choice([just("true"), just("doğru")]).to(Object::from(true))
-            .or(choice([just("false"), just("yanlış")]).to(Object::from(false)))
+            choice([just("true"), just("doğru")])
+                .to(Object::from(true))
+                .or(choice([just("false"), just("yanlış")]).to(Object::from(false))),
         )
     }
 }
@@ -130,7 +186,7 @@ impl Object {
         Box::new(choice([
             Number::parser(),
             Text::parser(),
-            Boolean::parser()
+            Boolean::parser(),
         ]))
     }
 }
@@ -139,34 +195,33 @@ impl Object {
 
 impl From<f64> for Object {
     fn from(value: f64) -> Self {
-        Object::Number(Number::from(value)) 
+        Object::Number(Number::from(value))
     }
 }
 
 impl From<String> for Object {
     fn from(value: String) -> Self {
-        Object::Text(Text::from(value)) 
+        Object::Text(Text::from(value))
     }
 }
 
 impl From<&str> for Object {
     fn from(value: &str) -> Self {
-        Object::Text(Text::from(value.to_owned())) 
+        Object::Text(Text::from(value.to_owned()))
     }
 }
 
 impl From<bool> for Object {
     fn from(value: bool) -> Self {
-        Object::Bool(Boolean::from(value)) 
+        Object::Bool(Boolean::from(value))
     }
 }
 
 impl From<Vec<Object>> for Object {
     fn from(value: Vec<Object>) -> Self {
-        Object::Array(Array::from(value)) 
+        Object::Array(Array::from(value))
     }
 }
-
 
 impl From<f64> for Number {
     fn from(value: f64) -> Self {
@@ -223,7 +278,9 @@ impl New<String> for Text {
     }
 
     fn new() -> Self {
-        Self { value: "".to_owned() }
+        Self {
+            value: "".to_owned(),
+        }
     }
 }
 
@@ -262,6 +319,8 @@ impl Display for Object {
             Object::Bool(val) => write!(f, "{}", val),
             Object::Number(val) => write!(f, "{}", val),
             Object::Text(val) => write!(f, "{}", val),
+            Object::Variable(val) => write!(f, "{}", val),
+            Object::Nil => write!(f, "NIL"),
         }
     }
 }
