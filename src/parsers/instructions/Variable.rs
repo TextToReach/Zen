@@ -17,6 +17,7 @@ pub fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, In
             .then(
                 Object::parser(currentScope).or(Variable::parser())
             )
+            .then_ignore(whitespace())
             .map(|(name, value)| Instruction(InstructionEnum::VariableDeclaration(name, value))),
     )
 }

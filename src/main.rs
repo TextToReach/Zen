@@ -2,11 +2,14 @@
 
 mod library;
 mod parsers;
+mod features;
 
 use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
 
 use chumsky::{Parser, prelude::*, primitive::Choice};
 use clap::{Parser as ClapParser, Subcommand};
+use colored::Colorize;
+use features::preprocessor;
 use library::{
     Environment::Environment,
     Methods::Throw,
@@ -33,6 +36,13 @@ enum Commands {
         /// Ayrıntılı çıktı göster
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
+
+        /// AST çıktısını göster
+        #[arg(long, default_value_t = false)]
+        printast: bool,
+
+        #[arg(long, default_value_t = false)]
+        printpreprocessoutput: bool,
     },
 }
 
@@ -78,17 +88,11 @@ pub fn ProcessArithmeticTree(obj: Box<Arithmetic>, currentScope: Rc<RefCell<Envi
 }
 
 fn resolve(obj: Object, currentScope: Rc<RefCell<Environment>>) -> Object {
-    match obj {        
-        Object::Variable(var_name) => {
-            currentScope.borrow().get(&var_name).unwrap_or_else(|| {
-                Throw( format!("{} adında bir değişken tanımlı değil.", var_name), ZenError::GeneralError, None, None, );
-                Object::Nil
-            })
-        }
+    match obj {
         Object::ArithmeticExpression(expr) => {
             ProcessArithmeticTree(Box::new(expr), currentScope.clone())
         }
-        _ => obj,
+        _ => {obj},
     }
 }
 
@@ -101,9 +105,9 @@ fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bo
                 .into_iter()
                 .map(|obj| resolve(obj, currentScope.clone()))
                 .collect();
+            
 
             PrintVec!(resolved_objects);
-            if verbose { PrettyDebugVec!(Objects); }
         }
         InstructionEnum::Forloop1(RepeatCount, Instructions) => {
             let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
@@ -125,8 +129,8 @@ fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bo
     }
 }
 
-fn run(file: String, verbose: bool) {
-    let input = match File::open(file) {
+fn run(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool) {
+    let mut input = match File::open(file) {
         Ok(res) => {
             let mut buffr = String::new();
             let mut res = res;
@@ -152,10 +156,12 @@ fn run(file: String, verbose: bool) {
         }
     };
     let ROOT_SCOPE = Rc::new(RefCell::new(Environment::new()));
+    preprocessor::index(&mut input);
+    if printPreprocessOutput { println!("Buffer:\n{}", input.red()); }
     
     match Kit::parser(ROOT_SCOPE.clone()).parse(input.clone()) {
         Ok(results) => {
-            if verbose { println!("AST: {:#?}\n\n", results); }
+            if printAst { println!("AST: {:#?}\n\n", results); }
             
 
             for result in results {
@@ -174,8 +180,8 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Run { file, verbose } => {
-            run(file, verbose);
+        Commands::Run { file, verbose, printast, printpreprocessoutput } => {
+            run(file, verbose, printast, printpreprocessoutput);
         }
     }
 }

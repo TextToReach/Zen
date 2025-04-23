@@ -555,7 +555,20 @@ impl Display for Object {
             Object::Text(val) => write!(f, "{}", val),
             Object::Variable(val) => write!(f, "{}", val),
             Object::Nil => write!(f, "NIL"),
-            Object::ArithmeticExpression(val) => write!(f, "{:?}", val),
+            Object::ArithmeticExpression(val) => write!(f, "{}", val)
+        }
+    }
+}
+
+impl Display for Arithmetic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Arithmetic::Value(val) => write!(f, "{}", val),
+            Arithmetic::Add(lhs, rhs) => write!(f, "{} + {}", lhs, rhs),
+            Arithmetic::Sub(lhs, rhs) => write!(f, "{} - {}", lhs, rhs),
+            Arithmetic::Mul(lhs, rhs) => write!(f, "{} * {}", lhs, rhs),
+            Arithmetic::Div(lhs, rhs) => write!(f, "{} / {}", lhs, rhs),
+            Arithmetic::Mod(lhs, rhs) => write!(f, "{} % {}", lhs, rhs),
         }
     }
 }

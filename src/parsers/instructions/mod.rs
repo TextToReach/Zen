@@ -23,9 +23,6 @@ pub mod Kit {
     pub fn whitespace() -> impl Parser<char, Vec<char>, Error = Simple<char>> {
         filter(|c: &char| c.is_whitespace() && *c != '\n').repeated()
     }
-    pub fn comment() -> impl Parser<char, (), Error = Simple<char>> {
-        just('#').ignore_then(take_until(newline())).ignored()
-    }
 
     pub fn separator<'a>() -> impl Parser<char, &'a str, Error = Simple<char>> {
         just(",").padded()
@@ -38,7 +35,7 @@ pub mod Kit {
                     Print::parser(currentScope.clone()),
                     Repeat::parser(instr_parser),
                     Variable::parser(currentScope.clone()),
-                    Box::new(whitespace().ignored().to(Instruction(InstructionEnum::NoOp))),
+                    Box::new(whitespace().to(Instruction(InstructionEnum::NoOp))),
                 ])
             }).separated_by(newline())
         )

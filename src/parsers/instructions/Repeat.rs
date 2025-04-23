@@ -14,14 +14,13 @@ pub fn parser(
     Box::new(
         Number::parser() // 10
             .then_ignore(whitespace()) // space
-            .then_ignore(just("defa").or(just("kere")).or(just("kez")))
-            .then_ignore(whitespace())
-            .then_ignore(just("tekrarla"))
-            .then_ignore(just("\n"))
-            .then(
-                just('\t').ignore_then(instr_parser.clone()).separated_by(newline())
-            ).map(|(a, b)| {
-                Instruction(InstructionEnum::Forloop1(a.asNumber().value.floor() as i64, b))
+            .then_ignore(just("defa").or(just("kere")).or(just("kez"))) // defa/kere/kez
+            .then_ignore(whitespace()) // space
+            .then_ignore(just("tekrarla").or(just("tekrar et"))) // tekrarla/tekrar et
+            .then_ignore(newline()) // \n
+            .then( just('\t').ignore_then(instr_parser).separated_by(newline()) )
+            .map(|(count, lines)| {
+                Instruction(InstructionEnum::Forloop1(count.asNumber().value.floor() as i64, lines))
             })
     )
 }
