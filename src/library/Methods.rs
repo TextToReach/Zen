@@ -47,6 +47,44 @@ macro_rules! PrintVec {
 }
 
 #[macro_export]
+macro_rules! DebugVec {
+    () => {
+        println!();
+    };
+
+    ($($arg:expr),*) => {
+        let mut acc: Vec<String> = Vec::new();
+
+        $(
+            for x in $arg {
+                acc.push(format!("{:?}", x));
+            }
+        )*
+
+        println!("{}", acc.join(" "));
+    };
+}
+
+#[macro_export]
+macro_rules! PrettyDebugVec {
+    () => {
+        println!();
+    };
+
+    ($($arg:expr),*) => {
+        let mut acc: Vec<String> = Vec::new();
+
+        $(
+            for x in $arg {
+                acc.push(format!("{:#?}", x));
+            }
+        )*
+
+        println!("{}", acc.join(" "));
+    };
+}
+
+#[macro_export]
 macro_rules! Debug {
     () => {
         println!();
@@ -57,6 +95,23 @@ macro_rules! Debug {
 
         $(
             acc.push(format!("{:?}", $arg));
+        )*
+
+        println!("{}", acc.join(" "));
+    };
+}
+
+#[macro_export]
+macro_rules! PrettyDebug {
+    () => {
+        println!();
+    };
+
+    ($($arg:expr),*) => {
+        let mut acc: Vec<String> = Vec::new();
+
+        $(
+            acc.push(format!("{:#?}", $arg));
         )*
 
         println!("{}", acc.join(" "));

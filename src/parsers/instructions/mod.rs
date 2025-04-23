@@ -1,16 +1,20 @@
 #![allow(non_snake_case, dead_code)]
 
-pub mod ForLoop1;
+pub mod Repeat;
 pub mod Print;
 pub mod Variable;
 
 /// Instructions with a different name
 pub mod Kit {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::library::Environment::Environment;
     use crate::library::Types::{Instruction, InstructionEnum, Object};
-    use chumsky::prelude::*;
+    use chumsky::{prelude::*, primitive::OrderedContainer};
     use chumsky::error::Simple;
 
-    use super::{ForLoop1, Print, Variable};
+    use super::{Repeat, Print, Variable};
 
     pub fn newline() -> impl Parser<char, char, Error = Simple<char>> {
         just('\n')
@@ -27,13 +31,13 @@ pub mod Kit {
         just(",").padded()
     }
 
-    pub fn parser<'a>() -> Box<dyn Parser<char, Vec<Instruction>, Error = Simple<char>> + 'a> {
+    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Vec<Instruction>, Error = Simple<char>> + 'a> {
         Box::new(
             recursive(|instr_parser| {
                 choice([
-                    Print::parser(),
-                    ForLoop1::parser(instr_parser),
-                    Variable::parser(),
+                    Print::parser(currentScope.clone()),
+                    Repeat::parser(instr_parser),
+                    Variable::parser(currentScope.clone()),
                     Box::new(whitespace().ignored().to(Instruction(InstructionEnum::NoOp))),
                 ])
             }).separated_by(newline())

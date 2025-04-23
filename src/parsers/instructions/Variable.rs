@@ -1,18 +1,21 @@
 #![allow(non_snake_case, dead_code)]
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use chumsky::prelude::*;
-use crate::library::Types::{Instruction, Object, InstructionEnum};
+use crate::library::{Environment::Environment, Types::{Instruction, InstructionEnum, Object, Parsable, Variable}};
 
 use super::Kit::whitespace;
 
-pub fn parser() -> Box<dyn Parser<char, Instruction, Error = Simple<char>>> {
+pub fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Instruction, Error = Simple<char>>> {
     Box::new(
         text::ident()
             .then_ignore(whitespace())
             .then_ignore(just('='))
             .then_ignore(whitespace())
             .then(
-                Object::parser().or(text::ident().map(|e| Object::Variable(e)))
+                Object::parser(currentScope).or(Variable::parser())
             )
             .map(|(name, value)| Instruction(InstructionEnum::VariableDeclaration(name, value))),
     )

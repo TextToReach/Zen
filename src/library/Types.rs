@@ -1,9 +1,16 @@
 #![allow(non_snake_case, dead_code)]
 
 use chumsky::prelude::*;
+use chumsky::text::whitespace;
 use chumsky::{Parser, error::Simple};
 
+use crate::library::Methods::Throw;
+
 use super::Array::Array;
+use super::Environment::Environment;
+use std::cell::RefCell;
+use std::ops::{Add, Div, Mul, Rem, Sub};
+use std::rc::Rc;
 use std::{fmt::Display, num::ParseFloatError, str::FromStr};
 
 /// Exact eq's:
@@ -18,7 +25,8 @@ pub enum Object {
     Array(Array),
     Bool(Boolean),
     Variable(String),
-    Nil
+    ArithmeticExpression(Arithmetic),
+    Nil,
 }
 
 impl Object {
@@ -61,8 +69,137 @@ impl Object {
             panic!("Error while trying to convert Object to Variable: Object is not a variable.")
         }
     }
+
+    pub fn asArithmetic(self) -> Arithmetic {
+        if let Object::ArithmeticExpression(val) = self {
+            val
+        } else {
+            panic!(
+                "Error while trying to convert Object to Arithmetic: Object is not an arithmetic expression."
+            )
+        }
+    }
 }
 
+impl Add for Object {
+    type Output = Object;
+
+    fn add(self, other: Object) -> Self::Output {
+        match (&self, &other) {
+            (Object::Number(a), Object::Number(b)) => {
+                Object::Number(Number::from(a.value + b.value))
+            }
+            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
+                if let Arithmetic::Value(val) = x.clone() {
+                    if let Object::Number(val) = *val {
+                        Object::from(n.value + val.value)
+                    } else {
+                        panic!("Error while trying to add two objects: Objects are not compatible.")
+                    }
+                } else {
+                    panic!("Error while trying to add two objects: Objects are not compatible.")
+                    
+                }
+            }
+            (Object::Text(a), Object::Text(b)) => Object::Text(Text::from(a.value.clone() + &b.value)),
+            _ => panic!("Error while trying to add two objects: Objects are not compatible. ({:?} and {:?})", self, other),
+        }
+    }
+}
+
+impl Sub for Object {
+    type Output = Object;
+
+    fn sub(self, other: Object) -> Self::Output {
+        match (&self, &other) {
+            (Object::Number(a), Object::Number(b)) => {
+                Object::Number(Number::from(a.value - b.value))
+            }
+            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
+                if let Arithmetic::Value(val) = x.clone() {
+                    if let Object::Number(val) = *val {
+                        Object::from(n.value - val.value)
+                    } else {
+                        panic!("Error while trying to subtract two objects: Objects are not compatible.")
+                    }
+                } else {
+                    panic!("Error while trying to subtract two objects: Objects are not compatible.")
+                    
+                }
+            }
+            _ => panic!("Error while trying to subtract two objects: Objects are not compatible. ({:?} and {:?})", self, other),
+        }
+    }
+}
+
+impl Mul for Object {
+    type Output = Object;
+
+    fn mul(self, other: Object) -> Self::Output {
+        match (&self, &other) {
+            (Object::Number(a), Object::Number(b)) => {
+                Object::Number(Number::from(a.value * b.value))
+            }
+            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
+                if let Arithmetic::Value(val) = x.clone() {
+                    if let Object::Number(val) = *val {
+                        Object::from(n.value * val.value)
+                    } else {
+                        panic!("Error while trying to multiply two objects: Objects are not compatible.")
+                    }
+                } else {
+                    panic!("Error while trying to multiply two objects: Objects are not compatible.")
+                    
+                }
+            }
+            (Object::Text(a), Object::Number(b)) | (Object::Number(b), Object::Text(a)) => {
+                Object::Text(Text::from(a.value.repeat(b.value as usize)))
+            }
+            _ => panic!("Error while trying to multiply two objects: Objects are not compatible. ({:?} and {:?})", self, other),
+        }
+    }
+}
+
+impl Div for Object {
+    type Output = Object;
+
+    fn div(self, other: Object) -> Self::Output {
+        match (&self, &other) {
+            (Object::Number(a), Object::Number(b)) => {
+                Object::Number(Number::from(a.value / b.value))
+            }
+            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
+                if let Arithmetic::Value(val) = x.clone() {
+                    if let Object::Number(val) = *val {
+                        Object::from(n.value / val.value)
+                    } else {
+                        panic!("Error while trying to subtract two objects: Objects are not compatible.")
+                    }
+                } else {
+                    panic!("Error while trying to subtract two objects: Objects are not compatible.")
+                    
+                }
+            }
+            _ => panic!("Error while trying to subtract two objects: Objects are not compatible. ({:?} and {:?})", self, other),
+        }
+    }
+}
+
+impl Rem for Object {
+    type Output = Object;
+
+    fn rem(self, other: Object) -> Self::Output {
+        match (self, other) {
+            (Object::Number(a), Object::Number(b)) => {
+                if b.value == 0.0 {
+                    panic!("Error while trying to divide two objects: Division by zero.");
+                }
+                Object::Number(Number::from(a.value % b.value))
+            }
+            _ => panic!("Error while trying to divide two objects: Objects are not compatible."),
+        }
+    }
+}
 /// Fill fields on demand. No need to fill al fields. See: forloop1.rs
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instruction(pub InstructionEnum);
@@ -78,6 +215,7 @@ pub enum ZenError {
     UnknownError,
     GeneralError,
     NotDeclaredError,
+    DivisionByZeroError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,6 +224,72 @@ pub enum InstructionEnum {
     Yazdır(Vec<Object>),
     Forloop1(i64, Vec<Instruction>),
     VariableDeclaration(String, Object),
+}
+
+pub mod Operator {
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum Arithmetic {
+        Plus,
+        Minus,
+        Multiply,
+        Divide,
+        Mod,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Arithmetic {
+    Value(Box<Object>),
+    Add(Box<Arithmetic>, Box<Arithmetic>),
+    Sub(Box<Arithmetic>, Box<Arithmetic>),
+    Mul(Box<Arithmetic>, Box<Arithmetic>),
+    Div(Box<Arithmetic>, Box<Arithmetic>),
+    Mod(Box<Arithmetic>, Box<Arithmetic>),
+}
+
+impl Arithmetic {
+    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+        // Arithmetic expression parser with operator precedence and parentheses
+        let currentScope_clone = currentScope.clone();
+        Box::new(
+            recursive(move |arith| {
+                let currentScope = currentScope_clone.clone();
+                // Parse a value: number, variable, or parenthesized arithmetic
+                let value = choice((
+                    Number::parser().map(|obj| Arithmetic::Value(Box::new(obj))),
+                    Variable::parser().map(|obj| Arithmetic::Value(Box::new(obj))),
+                    arith.clone().delimited_by(just('('), just(')')),
+                ))
+                .boxed();
+
+                // Operator precedence: *, /, % > +, -
+                let op_mul = just('*')
+                    .to(Arithmetic::Mul as fn(_, _) -> _)
+                    .or(just('/').to(Arithmetic::Div as fn(_, _) -> _))
+                    .or(just('%').to(Arithmetic::Mod as fn(_, _) -> _))
+                    .padded_by(whitespace());
+                let op_add = just('+')
+                    .to(Arithmetic::Add as fn(_, _) -> _)
+                    .or(just('-').to(Arithmetic::Sub as fn(_, _) -> _))
+                    .padded_by(whitespace());
+
+                // Multiplicative: value (('*' | '/' | '%') value)*
+                let mul = value
+                    .clone()
+                    .then(op_mul.then(value.clone()).repeated())
+                    .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
+
+                // Additive: mul (('+' | '-') mul)*
+                let add = mul
+                    .clone()
+                    .then(op_add.then(mul.clone()).repeated())
+                    .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
+
+                add
+            })
+            .map(|e| Object::from(e)),
+        )
+    }
 }
 
 // ------------------------------------------ Traits ------------------------------------------
@@ -124,6 +328,11 @@ pub struct Boolean {
     pub value: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variable {
+    pub value: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub parameters: Vec<ZenNamedParameter>,
@@ -134,24 +343,26 @@ pub struct Function {
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Number {
     fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
-        Box::new(
-            just("-")
-                .or_not()
-                .then(text::int::<_, Simple<char>>(10))
-                .then(just('.').ignore_then(text::digits(10)).or_not())
-                .map(|((negative, int), frac)| {
-                    Object::from(
-                        format!(
-                            "{}{}.{}",
-                            negative.unwrap_or("+"),
-                            int,
-                            frac.unwrap_or("0".to_owned())
-                        )
-                        .parse::<f64>()
-                        .unwrap(),
+        let out = just("-")
+            .or_not()
+            .then(text::int::<_, Simple<char>>(10))
+            .then(just('.').ignore_then(text::digits(10)).or_not())
+            .map(|((negative, int), frac)| {
+                Object::from(
+                    format!(
+                        "{}{}.{}",
+                        negative.unwrap_or("+"),
+                        int,
+                        frac.unwrap_or("0".to_owned())
                     )
-                }),
-        )
+                    .parse::<f64>()
+                    .unwrap(),
+                )
+            });
+
+        Box::new(recursive(|prev| {
+            prev.clone().delimited_by(just("("), just(")")).or(out)
+        }))
     }
 }
 
@@ -167,23 +378,41 @@ impl<'a> Parsable<'a, char, Object, Simple<char>> for Text {
             .then_ignore(just('"')) // Çift tırnakla bitir
             .collect::<String>(); // Karakterleri string'e çevir
 
-        Box::new(single_quoted.or(double_quoted).map(Object::from))
+        let out = single_quoted.or(double_quoted).map(Object::from);
+
+        Box::new(recursive(|prev| {
+            prev.clone().delimited_by(just("("), just(")")).or(out)
+        }))
     }
 }
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Boolean {
     fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+        let out = choice([just("true"), just("doğru")])
+            .to(Object::from(true))
+            .or(choice([just("false"), just("yanlış")]).to(Object::from(false)));
+
+        Box::new(recursive(|prev| {
+            prev.clone().delimited_by(just("("), just(")")).or(out)
+        }))
+    }
+}
+
+impl<'a> Parsable<'a, char, Object, Simple<char>> for Variable {
+    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+        let out = text::ident();
+
         Box::new(
-            choice([just("true"), just("doğru")])
-                .to(Object::from(true))
-                .or(choice([just("false"), just("yanlış")]).to(Object::from(false))),
+            recursive(|prev| prev.clone().delimited_by(just("("), just(")")).or(out))
+                .map(Object::Variable),
         )
     }
 }
 
 impl Object {
-    pub fn parser<'a>() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         Box::new(choice([
+            Arithmetic::parser(currentScope),
             Number::parser(),
             Text::parser(),
             Boolean::parser(),
@@ -223,6 +452,11 @@ impl From<Vec<Object>> for Object {
     }
 }
 
+impl From<Arithmetic> for Object {
+    fn from(value: Arithmetic) -> Self {
+        Object::ArithmeticExpression(value)
+    }
+}
 impl From<f64> for Number {
     fn from(value: f64) -> Self {
         Self { value }
@@ -321,6 +555,7 @@ impl Display for Object {
             Object::Text(val) => write!(f, "{}", val),
             Object::Variable(val) => write!(f, "{}", val),
             Object::Nil => write!(f, "NIL"),
+            Object::ArithmeticExpression(val) => write!(f, "{:?}", val),
         }
     }
 }
