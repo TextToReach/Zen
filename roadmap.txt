@@ -1,0 +1,1 @@
+Sıradaki hedef "girdi" komutu ve bu komutun çıktısını bir değişkene, veya direkt olarak yazdır komutuna aktarabilmek.
