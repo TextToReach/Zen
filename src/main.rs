@@ -4,7 +4,7 @@ mod library;
 mod parsers;
 mod features;
 
-use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
+use std::{cell::RefCell, fs::File, io::Read, ops::Deref, rc::Rc};
 
 use chumsky::{Parser, prelude::*, primitive::Choice};
 use clap::{Parser as ClapParser, Subcommand};
@@ -13,7 +13,7 @@ use features::preprocessor;
 use library::{
     Environment::Environment,
     Methods::Throw,
-    Types::{Arithmetic, Instruction, InstructionEnum, Object, ZenError},
+    Types::{Expression, Instruction, InstructionEnum, Object, ZenError},
 };
 use parsers::instructions::{Kit, Print};
 
@@ -46,51 +46,11 @@ enum Commands {
     },
 }
 
-pub fn ProcessArithmeticTree(obj: Box<Arithmetic>, currentScope: Rc<RefCell<Environment>>) -> Object {
-    match *obj {
-        Arithmetic::Add(lhs, rhs) => {
-            let left = ProcessArithmeticTree(lhs, currentScope.clone());
-            let right = ProcessArithmeticTree(rhs, currentScope.clone());
-            left + right
-        }
-        Arithmetic::Sub(lhs, rhs) => {
-            let left = ProcessArithmeticTree(lhs, currentScope.clone());
-            let right = ProcessArithmeticTree(rhs, currentScope.clone());
-            left - right
-        }
-        Arithmetic::Mul(lhs, rhs) => {
-            let left = ProcessArithmeticTree(lhs, currentScope.clone());
-            let right = ProcessArithmeticTree(rhs, currentScope.clone());
-            left * right
-        }
-        Arithmetic::Div(lhs, rhs) => {
-            let left = ProcessArithmeticTree(lhs, currentScope.clone());
-            let right = ProcessArithmeticTree(rhs, currentScope.clone());
-            left / right
-        }
-        Arithmetic::Mod(lhs, rhs) => {
-            let left = ProcessArithmeticTree(lhs, currentScope.clone());
-            let right = ProcessArithmeticTree(rhs, currentScope.clone());
-            left % right
-        }
-        Arithmetic::Value(val) => {
-            match *val {
-                Object::Variable(ref var_name) => {
-                    currentScope.borrow().get(var_name).unwrap_or_else(|| {
-                        Throw( format!("{} adında bir değişken tanımlı değil.", var_name), ZenError::GeneralError, None, None, );
-                        Object::Nil
-                    })
-                }
-                ref other => other.clone(),
-            }
-        }
-    }
-}
-
+/// Resolve the object to its final value (gets the value of variables)
 fn resolve(obj: Object, currentScope: Rc<RefCell<Environment>>) -> Object {
     match obj {
-        Object::ArithmeticExpression(expr) => {
-            ProcessArithmeticTree(Box::new(expr), currentScope.clone())
+        Object::Expression(expr) => {
+            expr.evaluate(currentScope.clone())
         }
         _ => {obj},
     }
@@ -100,14 +60,15 @@ fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bo
     let InstructionVariant = AST.0;
 
     match InstructionVariant {
-        InstructionEnum::Yazdır(Objects) => {
+        InstructionEnum::Print(Objects) => {
             let resolved_objects: Vec<_> = Objects.clone()
                 .into_iter()
-                .map(|obj| resolve(obj, currentScope.clone()))
+                .map(|obj| resolve(obj.evaluate(currentScope.clone()), currentScope.clone()))
                 .collect();
             
 
-            PrintVec!(resolved_objects);
+            PrintVec!(&resolved_objects);
+            if verbose { PrettyDebugVec!(resolved_objects); }
         }
         InstructionEnum::Forloop1(RepeatCount, Instructions) => {
             let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
@@ -119,11 +80,9 @@ fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bo
             }
         }
         InstructionEnum::VariableDeclaration(Name, Value) => {
-            if let Object::Variable(var_name) = &Value {
-                // Continue from here
-                Throw( format!("{} adında bir değişken tanımlı değil.", var_name), ZenError::GeneralError, None, None, );
-            }
-            currentScope.borrow_mut().set(&Name, Value);
+            let value = Value.evaluate(currentScope.clone());
+            
+            currentScope.borrow_mut().set(&Name, value);
         }
         _ => {}
     }

@@ -25,8 +25,8 @@ pub enum Object {
     Array(Array),
     Bool(Boolean),
     Variable(String),
-    ArithmeticExpression(Arithmetic),
-    Nil,
+    Expression(Expression),
+    Null,
 }
 
 impl Object {
@@ -70,12 +70,12 @@ impl Object {
         }
     }
 
-    pub fn asArithmetic(self) -> Arithmetic {
-        if let Object::ArithmeticExpression(val) = self {
+    pub fn asExpression(self) -> Expression {
+        if let Object::Expression(val) = self {
             val
         } else {
             panic!(
-                "Error while trying to convert Object to Arithmetic: Object is not an arithmetic expression."
+                "Error while trying to convert Object to Expression: Object is not an expression expression."
             )
         }
     }
@@ -89,8 +89,8 @@ impl Add for Object {
             (Object::Number(a), Object::Number(b)) => {
                 Object::Number(Number::from(a.value + b.value))
             }
-            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
-                if let Arithmetic::Value(val) = x.clone() {
+            (Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
+                if let Expression::Value(val) = x.clone() {
                     if let Object::Number(val) = *val {
                         Object::from(n.value + val.value)
                     } else {
@@ -115,8 +115,8 @@ impl Sub for Object {
             (Object::Number(a), Object::Number(b)) => {
                 Object::Number(Number::from(a.value - b.value))
             }
-            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
-                if let Arithmetic::Value(val) = x.clone() {
+            (Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
+                if let Expression::Value(val) = x.clone() {
                     if let Object::Number(val) = *val {
                         Object::from(n.value - val.value)
                     } else {
@@ -140,8 +140,8 @@ impl Mul for Object {
             (Object::Number(a), Object::Number(b)) => {
                 Object::Number(Number::from(a.value * b.value))
             }
-            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
-                if let Arithmetic::Value(val) = x.clone() {
+            (Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
+                if let Expression::Value(val) = x.clone() {
                     if let Object::Number(val) = *val {
                         Object::from(n.value * val.value)
                     } else {
@@ -168,8 +168,8 @@ impl Div for Object {
             (Object::Number(a), Object::Number(b)) => {
                 Object::Number(Number::from(a.value / b.value))
             }
-            (Object::Number(n), Object::ArithmeticExpression(x)) | (Object::ArithmeticExpression(x), Object::Number(n)) => {
-                if let Arithmetic::Value(val) = x.clone() {
+            (Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
+                if let Expression::Value(val) = x.clone() {
                     if let Object::Number(val) = *val {
                         Object::from(n.value / val.value)
                     } else {
@@ -200,9 +200,17 @@ impl Rem for Object {
         }
     }
 }
-/// Fill fields on demand. No need to fill al fields. See: forloop1.rs
+
+pub trait isInstruction {}
+impl isInstruction for Instruction {}
+impl isInstruction for InstructionYield {}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instruction(pub InstructionEnum);
+
+/// This instruction type can "yield" a value. Meaning you can assign its output to a variable, can directly print it or pass it as an argument to a function.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InstructionYield(pub InstructionEnum);
 
 #[derive(Debug, Clone)]
 pub struct ZenNamedParameter {
@@ -221,9 +229,11 @@ pub enum ZenError {
 #[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
     NoOp,
-    Yazdır(Vec<Object>),
+    Print(Vec<Expression>),
+    Input(Expression),
     Forloop1(i64, Vec<Instruction>),
-    VariableDeclaration(String, Object),
+    VariableDeclaration(String, Expression),
+    
 }
 
 pub mod Operator {
@@ -238,39 +248,53 @@ pub mod Operator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Arithmetic {
+pub enum Expression {
     Value(Box<Object>),
-    Add(Box<Arithmetic>, Box<Arithmetic>),
-    Sub(Box<Arithmetic>, Box<Arithmetic>),
-    Mul(Box<Arithmetic>, Box<Arithmetic>),
-    Div(Box<Arithmetic>, Box<Arithmetic>),
-    Mod(Box<Arithmetic>, Box<Arithmetic>),
+    Add(Box<Expression>, Box<Expression>),
+    Sub(Box<Expression>, Box<Expression>),
+    Mul(Box<Expression>, Box<Expression>),
+    Div(Box<Expression>, Box<Expression>),
+    Mod(Box<Expression>, Box<Expression>),
 }
 
-impl Arithmetic {
-    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
-        // Arithmetic expression parser with operator precedence and parentheses
+impl From<Object> for Expression {
+    fn from(value: Object) -> Self {
+        Expression::Value(Box::new(value))
+    }
+}
+
+impl Expression {
+    /// In Zenlang, everything is either an instruction or an expression. Instructions can yield values (like "girdi" instruction) and not, but expressions always yield values. 
+    /// Expressions and instructions use the Object type to transfer data around. Object::from is the main method to convert a normal Rust type to it's equivalent in Object struct.
+    /// This function is the main way to parse Expressions.
+    /// 
+    /// ```
+    /// Expression::parser(currentScope)
+    /// ```
+
+    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Expression, Error = Simple<char>> + 'a> {
+        // Expression parser with operator precedence and parentheses
         let currentScope_clone = currentScope.clone();
         Box::new(
-            recursive(move |arith| {
+            recursive(move |expression| {
                 let currentScope = currentScope_clone.clone();
-                // Parse a value: number, variable, or parenthesized arithmetic
+                // Parse a value: number, variable, or parenthesized expression
                 let value = choice((
-                    Number::parser().map(|obj| Arithmetic::Value(Box::new(obj))),
-                    Variable::parser().map(|obj| Arithmetic::Value(Box::new(obj))),
-                    arith.clone().delimited_by(just('('), just(')')),
+                    Object::parser(currentScope).map(|obj| Expression::Value(Box::new(obj))), // The whole object parser
+                    Variable::parser().map(|obj| Expression::Value(Box::new(obj))),
+                    expression.clone().delimited_by(just('('), just(')')), // parser from the previous iteration
                 ))
                 .boxed();
 
                 // Operator precedence: *, /, % > +, -
                 let op_mul = just('*')
-                    .to(Arithmetic::Mul as fn(_, _) -> _)
-                    .or(just('/').to(Arithmetic::Div as fn(_, _) -> _))
-                    .or(just('%').to(Arithmetic::Mod as fn(_, _) -> _))
+                    .to(Expression::Mul as fn(_, _) -> _)
+                    .or(just('/').to(Expression::Div as fn(_, _) -> _))
+                    .or(just('%').to(Expression::Mod as fn(_, _) -> _))
                     .padded_by(whitespace());
                 let op_add = just('+')
-                    .to(Arithmetic::Add as fn(_, _) -> _)
-                    .or(just('-').to(Arithmetic::Sub as fn(_, _) -> _))
+                    .to(Expression::Add as fn(_, _) -> _)
+                    .or(just('-').to(Expression::Sub as fn(_, _) -> _))
                     .padded_by(whitespace());
 
                 // Multiplicative: value (('*' | '/' | '%') value)*
@@ -287,8 +311,49 @@ impl Arithmetic {
 
                 add
             })
-            .map(|e| Object::from(e)),
+            .map(|e| e),
         )
+    }
+
+    pub fn evaluate(&self, currentScope: Rc<RefCell<Environment>>) -> Object {
+        match self {
+            Expression::Add(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                left + right
+            }
+            Expression::Sub(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                left - right
+            }
+            Expression::Mul(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                left * right
+            }
+            Expression::Div(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                left / right
+            }
+            Expression::Mod(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                left % right
+            }
+            Expression::Value(val) => {
+                match **val {
+                    Object::Variable(ref var_name) => {
+                        currentScope.borrow().get(var_name).unwrap_or_else(|| {
+                            Throw( format!("{} adında bir değişken tanımlı değil.", var_name), ZenError::GeneralError, None, None, );
+                            Object::Null
+                        })
+                    }
+                    ref other => other.clone(),
+                }
+            }
+        }
     }
 }
 
@@ -412,7 +477,6 @@ impl<'a> Parsable<'a, char, Object, Simple<char>> for Variable {
 impl Object {
     pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         Box::new(choice([
-            Arithmetic::parser(currentScope),
             Number::parser(),
             Text::parser(),
             Boolean::parser(),
@@ -452,9 +516,9 @@ impl From<Vec<Object>> for Object {
     }
 }
 
-impl From<Arithmetic> for Object {
-    fn from(value: Arithmetic) -> Self {
-        Object::ArithmeticExpression(value)
+impl From<Expression> for Object {
+    fn from(value: Expression) -> Self {
+        Object::Expression(value)
     }
 }
 impl From<f64> for Number {
@@ -554,21 +618,21 @@ impl Display for Object {
             Object::Number(val) => write!(f, "{}", val),
             Object::Text(val) => write!(f, "{}", val),
             Object::Variable(val) => write!(f, "{}", val),
-            Object::Nil => write!(f, "NIL"),
-            Object::ArithmeticExpression(val) => write!(f, "{}", val)
+            Object::Null => write!(f, "NIL"),
+            Object::Expression(val) => write!(f, "{}", val)
         }
     }
 }
 
-impl Display for Arithmetic {
+impl Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Arithmetic::Value(val) => write!(f, "{}", val),
-            Arithmetic::Add(lhs, rhs) => write!(f, "{} + {}", lhs, rhs),
-            Arithmetic::Sub(lhs, rhs) => write!(f, "{} - {}", lhs, rhs),
-            Arithmetic::Mul(lhs, rhs) => write!(f, "{} * {}", lhs, rhs),
-            Arithmetic::Div(lhs, rhs) => write!(f, "{} / {}", lhs, rhs),
-            Arithmetic::Mod(lhs, rhs) => write!(f, "{} % {}", lhs, rhs),
+            Expression::Value(val) => write!(f, "{}", val),
+            Expression::Add(lhs, rhs) => write!(f, "{} + {}", lhs, rhs),
+            Expression::Sub(lhs, rhs) => write!(f, "{} - {}", lhs, rhs),
+            Expression::Mul(lhs, rhs) => write!(f, "{} * {}", lhs, rhs),
+            Expression::Div(lhs, rhs) => write!(f, "{} / {}", lhs, rhs),
+            Expression::Mod(lhs, rhs) => write!(f, "{} % {}", lhs, rhs),
         }
     }
 }

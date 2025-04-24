@@ -3,6 +3,7 @@
 pub mod Repeat;
 pub mod Print;
 pub mod Variable;
+pub mod Input;
 
 /// Instructions with a different name
 pub mod Kit {
@@ -14,7 +15,7 @@ pub mod Kit {
     use chumsky::{prelude::*, primitive::OrderedContainer};
     use chumsky::error::Simple;
 
-    use super::{Repeat, Print, Variable};
+    use super::{Input, Print, Repeat, Variable};
 
     pub fn newline() -> impl Parser<char, char, Error = Simple<char>> {
         just('\n')
@@ -28,6 +29,7 @@ pub mod Kit {
         just(",").padded()
     }
 
+    /// And this is the instruction parser
     pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Vec<Instruction>, Error = Simple<char>> + 'a> {
         Box::new(
             recursive(|instr_parser| {
@@ -36,6 +38,7 @@ pub mod Kit {
                     Repeat::parser(instr_parser),
                     Variable::parser(currentScope.clone()),
                     Box::new(whitespace().to(Instruction(InstructionEnum::NoOp))),
+                    Input::parser(currentScope.clone()),
                 ])
             }).separated_by(newline())
         )

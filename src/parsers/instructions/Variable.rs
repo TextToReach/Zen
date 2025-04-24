@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use chumsky::prelude::*;
-use crate::library::{Environment::Environment, Types::{Instruction, InstructionEnum, Object, Parsable, Variable}};
+use crate::library::{Environment::Environment, Types::{Expression, Instruction, InstructionEnum, Object, Parsable, Variable}};
 
 use super::Kit::whitespace;
 
@@ -15,7 +15,7 @@ pub fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, In
             .then_ignore(just('='))
             .then_ignore(whitespace())
             .then(
-                Object::parser(currentScope).or(Variable::parser())
+                Expression::parser(currentScope)
             )
             .then_ignore(whitespace())
             .map(|(name, value)| Instruction(InstructionEnum::VariableDeclaration(name, value))),

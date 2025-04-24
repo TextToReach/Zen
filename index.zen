@@ -1,3 +1,4 @@
-10 kere tekrar et
-	20 kere tekrar et
-		yazdır "ATATÜRK!"
+a = 20 + 5
+5 kere tekrar et
+	2 kere tekrar et
+		yazdır a
