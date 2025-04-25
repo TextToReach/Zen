@@ -13,7 +13,7 @@ use features::preprocessor;
 use library::{
     Environment::Environment,
     Methods::Throw,
-    Types::{Expression, Instruction, InstructionEnum, Object, ZenError},
+    Types::{Comparison, Expression, Instruction, InstructionEnum, Object, ZenError},
 };
 use parsers::instructions::{InstrKit, Print};
 
@@ -83,6 +83,35 @@ fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bo
             let value = Value.evaluate(currentScope.clone());
             
             currentScope.borrow_mut().set(&Name, value);
+        }
+        InstructionEnum::If { ifBlock, elifBlocks, elseBlock } => {
+            let ifCondition = ifBlock.condition.evaluate(currentScope.clone()).isTruthy();
+
+            if ifCondition {
+                let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
+                for instr in ifBlock.onSuccess.iter() {
+                    process(instr.clone(), innerScope.clone(), verbose);
+                }
+            } else if let Some(elifBlocks) = elifBlocks {
+
+                for elifBlock in elifBlocks {
+                    let elifCondition = elifBlock.condition.evaluate(currentScope.clone()).isTruthy();
+                    if elifCondition {
+                        let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
+                        for instr in elifBlock.onSuccess.iter() {
+                            process(instr.clone(), innerScope.clone(), verbose);
+                        }
+                        break;
+                    }
+                }
+                
+            } else if let Some(elseBlock) = elseBlock {
+                let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
+                for instr in elseBlock.iter() {
+                    process(instr.clone(), innerScope.clone(), verbose);
+                }
+
+            }
         }
         _ => {}
     }

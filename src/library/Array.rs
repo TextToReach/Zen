@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use super::Types::{New, Object};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Array {
     pub value: Vec<Object>,
 }

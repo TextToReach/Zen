@@ -8,14 +8,14 @@ use crate::library::{Environment::Environment, Types::{BaseTypes, Expression, In
 use crate::InstrKit::separator;
 
 pub fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, InstructionYield, Error = Simple<char>>> {
-    let ts = BaseTypes::values;
+    let ts = BaseTypes::VALUES;
     
     Box::new(just("sor")
         .then(
             just(ts[0]).or(just(ts[1])).or(just(ts[2])).or(just(ts[3])).delimited_by(just("("), just(")")).or_not().map(|e|{
                 match e {
                     Some(t) => t,
-                    None => BaseTypes::values[0],
+                    None => BaseTypes::VALUES[0],
                 }
             })
         )

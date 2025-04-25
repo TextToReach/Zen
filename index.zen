@@ -1,4 +1,6 @@
-a = sor(mantıksal) "Öğrenci misiniz: "
+a = sor(sayı) "Bir sayı söyle: "
 
-10 kere tekrarla
-	yazdır 18-a
+eğer (a << 10) ise
+	yazdır "Söylediğin sayı 10'dan küçük."
+değilse
+	yazdır "Söylediğin sayı 10'dan büyük veya eşit."

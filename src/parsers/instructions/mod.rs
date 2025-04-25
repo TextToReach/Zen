@@ -3,6 +3,7 @@
 pub mod Repeat;
 pub mod Print;
 pub mod Variable;
+pub mod If;
 
 /// Instructions with a different name
 pub mod InstrKit {
@@ -14,10 +15,10 @@ pub mod InstrKit {
     use chumsky::{prelude::*, primitive::OrderedContainer};
     use chumsky::error::Simple;
 
-    use super::{Print, Repeat, Variable};
+    use super::{Print, Repeat, Variable, If};
 
     pub fn newline() -> impl Parser<char, char, Error = Simple<char>> {
-        just('\n')
+        whitespace().or_not().then(just('\n')).ignored().to('.')
     }
     
     pub fn whitespace() -> Rc<impl Parser<char, Vec<char>, Error = Simple<char>>> {
@@ -34,7 +35,8 @@ pub mod InstrKit {
             recursive(|instr_parser| {
                 choice([
                     Print::parser(currentScope.clone()),
-                    Repeat::parser(instr_parser),
+                    Repeat::parser(currentScope.clone(), instr_parser.clone()),
+                    If::parser(currentScope.clone(), instr_parser.clone()),
                     Variable::parser(currentScope.clone()),
                     Box::new(whitespace().to(Instruction(InstructionEnum::NoOp))),
                 ])

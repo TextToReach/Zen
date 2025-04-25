@@ -30,8 +30,13 @@ pub mod InstrYieldKit {
                         Box::new(Object::from(num))
                     },
                     BaseTypes::Bool => {
-                        let boolean = input.parse::<bool>().unwrap_or(false);
-                        Box::new(Object::from(boolean))
+                        if BaseTypes::POSSIBLEBOOLEANVALUES[0].contains(&input.as_str()) {
+                            return Box::new(Object::from(true));
+                        } else if BaseTypes::POSSIBLEBOOLEANVALUES[1].contains(&input.as_str()) {
+                            return Box::new(Object::from(false));
+                        } else {
+                            return Box::new(Object::from(false));
+                        }
                     },
                     BaseTypes::Array => todo!()
                 }

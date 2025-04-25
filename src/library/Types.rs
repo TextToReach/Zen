@@ -7,6 +7,7 @@ use num::pow::Pow;
 use num::Float;
 
 use crate::library::Methods::Throw;
+use crate::parsers;
 
 use super::Array::Array;
 use super::Environment::Environment;
@@ -21,7 +22,7 @@ use std::{fmt::Display, num::ParseFloatError, str::FromStr};
 /// - Text = String
 /// - Array = Vec<Object>
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Object {
     Number(Number),
     Text(Text),
@@ -41,20 +42,24 @@ pub enum BaseTypes {
 }
 
 impl BaseTypes {
-    pub const values: [&str; 4] = [
+    pub const VALUES: [&str; 4] = [
         "yazı",
         "sayı",
         "liste",
         "mantıksal",
     ];
 
+    pub const POSSIBLEBOOLEANVALUES: [[&str; 4]; 2] = [
+        [ "doğru", "evet", "yes", "true"],
+        [ "yanlış", "hayır", "no", "false"]
+    ];
+
     pub fn from_str(s: &str) -> Self {
-        println!("fromstrden {}", s);
         match s {
-            val if val == Self::values[0] => BaseTypes::Text,
-            val if val == Self::values[1] => BaseTypes::Number,
-            val if val == Self::values[2] => BaseTypes::Array,
-            val if val == Self::values[3] => BaseTypes::Bool,
+            val if val == Self::VALUES[0] => BaseTypes::Text,
+            val if val == Self::VALUES[1] => BaseTypes::Number,
+            val if val == Self::VALUES[2] => BaseTypes::Array,
+            val if val == Self::VALUES[3] => BaseTypes::Bool,
             _ => panic!("Error while trying to convert string to BaseType: Unknown type."),
         }
     }
@@ -108,6 +113,18 @@ impl Object {
             panic!(
                 "Error while trying to convert Object to Expression: Object is not an expression expression."
             )
+        }
+    }
+
+    pub fn isTruthy(&self) -> bool {
+        match self {
+            Object::Bool(val) => val.value,
+            Object::Number(val) => val.value != 0.0,
+            Object::Text(val) => !val.value.is_empty(),
+            Object::Array(val) => !val.value.is_empty(),
+            Object::Variable(_) => true,
+            Object::Null => false,
+            Object::Expression(_) => true,
         }
     }
 }
@@ -268,12 +285,23 @@ pub enum ZenError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct IfBlockStructure {
+    pub condition: Expression,
+    pub onSuccess: Vec<Instruction>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
     NoOp,
     Print(Vec<Expression>),
     Input(Object, BaseTypes),
     Forloop1(i64, Vec<Instruction>),
     VariableDeclaration(String, Expression),
+    If{
+        ifBlock: IfBlockStructure,
+        elifBlocks: Option<Vec<IfBlockStructure>>,
+        elseBlock: Option<Vec<Instruction>>,
+    },
     
 }
 
@@ -288,7 +316,7 @@ pub mod Operator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Expression {
     Value(Box<Object>),
     Add(Box<Expression>, Box<Expression>),
@@ -297,6 +325,15 @@ pub enum Expression {
     Div(Box<Expression>, Box<Expression>),
     Mod(Box<Expression>, Box<Expression>),
     Pow(Box<Expression>, Box<Expression>),
+
+    LessThan(Box<Expression>, Box<Expression>),
+    GreaterThan(Box<Expression>, Box<Expression>),
+    LessThanOrEqual(Box<Expression>, Box<Expression>),
+    GreaterThanOrEqual(Box<Expression>, Box<Expression>),
+    Equal(Box<Expression>, Box<Expression>),
+    NotEqual(Box<Expression>, Box<Expression>),
+    // And(Box<Expression>, Box<Expression>),
+    // Or(Box<Expression>, Box<Expression>),
 }
 
 impl From<Object> for Expression {
@@ -314,21 +351,31 @@ impl Expression {
     /// Expression::parser(currentScope)
     /// ```
 
-    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Expression, Error = Simple<char>> + 'a> {
-        // Expression parser with operator precedence and parentheses
+    pub fn fromComparison(comparison: Comparison) -> Self {
+        match comparison.operator {
+            ComparisonOperators::Equal => Expression::Equal(Box::new(comparison.left), Box::new(comparison.right)),
+            ComparisonOperators::NotEqual => Expression::NotEqual(Box::new(comparison.left), Box::new(comparison.right)),
+            ComparisonOperators::GreaterThan => Expression::GreaterThan(Box::new(comparison.left), Box::new(comparison.right)),
+            ComparisonOperators::LessThan => Expression::LessThan(Box::new(comparison.left), Box::new(comparison.right)),
+            ComparisonOperators::GreaterThanOrEqual => Expression::GreaterThanOrEqual(Box::new(comparison.left), Box::new(comparison.right)),
+            ComparisonOperators::LessThanOrEqual => Expression::LessThanOrEqual(Box::new(comparison.left), Box::new(comparison.right)),
+        }
+    }
+
+    pub fn mathParser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Expression, Error = Simple<char>> + 'a> {
         let currentScope_clone = currentScope.clone();
         Box::new(
             recursive(move |expression| {
                 let currentScope = currentScope_clone.clone();
                 // Parse a value: number, variable, or parenthesized expression
                 let value = choice((
-                    Object::parser(currentScope).map(|obj| Expression::Value(Box::new(obj))), // The whole object parser
-                    Variable::parser().map(|obj| Expression::Value(Box::new(obj))),
+                    Object::parser(currentScope.clone()).map(|obj| Expression::Value(Box::new(obj))), // The whole object parser
+                    Variable::parser(currentScope.clone()).map(|obj| Expression::Value(Box::new(obj))),
                     expression.clone().delimited_by(just('('), just(')')), // parser from the previous iteration
                 ))
                 .boxed();
 
-                // Operator precedence: *, /, % > +, -
+                // Operator precedence: *, /, % > +, - > comparisons
                 let op_mul = just('*')
                     .to(Expression::Mul as fn(_, _) -> _)
                     .or(just('/').to(Expression::Div as fn(_, _) -> _))
@@ -352,9 +399,26 @@ impl Expression {
                     .then(op_add.then(mul.clone()).repeated())
                     .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
 
+
                 add
             })
             .map(|e| e),
+        )
+    }
+
+    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Expression, Error = Simple<char>> + 'a> {
+        Box::new(
+            recursive(move |expression| {
+                let currentScopeClone = currentScope.clone();
+                let comparison = Comparison::parser(currentScope.clone())
+                    .map(move |comp| Expression::fromComparison(comp));
+                let parsers = choice([
+                    Box::new(comparison),
+                    Expression::mathParser(currentScopeClone.clone()),
+                ]);
+                
+                expression.clone().delimited_by(just('('), just(')')).or(parsers)
+            })
         )
     }
 
@@ -401,7 +465,96 @@ impl Expression {
                     ref other => other.clone(),
                 }
             }
+            Expression::Equal(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                Object::from(left == right)
+            }
+            Expression::NotEqual(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                Object::from(left != right)
+            }
+            Expression::LessThan(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                Object::from(left < right)
+            }
+            Expression::GreaterThan(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                Object::from(left > right)
+            }
+            Expression::LessThanOrEqual(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                Object::from(left <= right)
+            }
+            Expression::GreaterThanOrEqual(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                Object::from(left >= right)
+            }
+            
         }
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ComparisonOperators {
+    Equal,
+    NotEqual,
+    GreaterThan,
+    LessThan,
+    GreaterThanOrEqual,
+    LessThanOrEqual,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Comparison {
+    pub left: Expression,
+    pub operator: ComparisonOperators,
+    pub right: Expression,
+}
+
+impl Comparison {
+    pub fn evaluate(&self, currentScope: Rc<RefCell<Environment>>) -> bool {
+        let left = self.left.evaluate(currentScope.clone());
+        let right = self.right.evaluate(currentScope.clone());
+
+        match self.operator {
+            ComparisonOperators::Equal => left == right,
+            ComparisonOperators::NotEqual => left != right,
+            ComparisonOperators::GreaterThan => left > right,
+            ComparisonOperators::LessThan => left < right,
+            ComparisonOperators::GreaterThanOrEqual => left >= right,
+            ComparisonOperators::LessThanOrEqual => left <= right,
+        }
+    }
+
+    pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Comparison, Error = Simple<char>> + 'a> {
+        let currentScope_clone = currentScope.clone();
+        Box::new(
+            recursive(move |comparison| {
+                let currentScope = currentScope_clone.clone();
+                let left = Expression::mathParser(currentScope.clone());
+                let operator = choice((
+                    just("==").to(ComparisonOperators::Equal),
+                    just("!=").to(ComparisonOperators::NotEqual),
+                    just(">=").to(ComparisonOperators::GreaterThanOrEqual),
+                    just("<=").to(ComparisonOperators::LessThanOrEqual),
+                    just(">>").to(ComparisonOperators::GreaterThan),
+                    just("<<").to(ComparisonOperators::LessThan),
+                )).padded();
+                let right = Expression::mathParser(currentScope.clone());
+
+                left
+                    .then(operator)
+                    .then(right)
+                    .map(|((left, operator), right)| Comparison { left, operator, right })
+            }),
+        )
     }
 }
 
@@ -421,27 +574,27 @@ where
     I: 'a + Clone,
     E: chumsky::error::Error<I> + 'a,
 {
-    fn parser() -> Box<dyn Parser<I, O, Error = E> + 'a>;
+    fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<I, O, Error = E> + 'a>;
 }
 
 // ------------------------------------------ Structs ------------------------------------------
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Number {
     pub value: f64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Text {
     pub value: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Boolean {
     pub value: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Variable {
     pub value: String,
 }
@@ -455,7 +608,7 @@ pub struct Function {
 // ------------------------------------------ Parser Implements ------------------------------------------
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Number {
-    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+    fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         let out = just("-")
             .or_not()
             .then(text::int::<_, Simple<char>>(10))
@@ -480,7 +633,7 @@ impl<'a> Parsable<'a, char, Object, Simple<char>> for Number {
 }
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Text {
-    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+    fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         let single_quoted = just('\'') // Tek tırnakla başla
             .ignore_then(filter(|c| *c != '\'').repeated()) // Tek tırnak bitene kadar karakterleri al
             .then_ignore(just('\'')) // Tek tırnakla bitir
@@ -500,19 +653,24 @@ impl<'a> Parsable<'a, char, Object, Simple<char>> for Text {
 }
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Boolean {
-    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
-        let out = just("true").or(just("doğru"))
-            .to(Object::from(true))
-            .or(just("false").or(just("yanlış")).to(Object::from(false)));
+    fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+        let basic = just("true").or(just("doğru"))
+            .to(Box::new(Object::from(true)))
+            .or(just("false").or(just("yanlış")).to(Box::new(Object::from(false))));
 
-        Box::new(recursive(|prev| {
-            prev.clone().delimited_by(just("("), just(")")).or(out)
-        }))
+        Box::new(
+            recursive(|prev| {
+                prev.clone()
+                    .delimited_by(just("("), just(")"))
+                    .or(basic)
+            })
+            .map(|boxed_obj| *boxed_obj)
+        )
     }
 }
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Variable {
-    fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
+    fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         let out = text::ident();
 
         Box::new(
@@ -525,9 +683,9 @@ impl<'a> Parsable<'a, char, Object, Simple<char>> for Variable {
 impl Object {
     pub fn parser<'a>(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
         Box::new(choice([
-            Number::parser(),
-            Text::parser(),
-            Boolean::parser(),
+            Number::parser(currentScope.clone()),
+            Text::parser(currentScope.clone()),
+            Boolean::parser(currentScope.clone()),
         ]))
     }
 }
@@ -682,6 +840,12 @@ impl Display for Expression {
             Expression::Div(lhs, rhs) => write!(f, "{} / {}", lhs, rhs),
             Expression::Mod(lhs, rhs) => write!(f, "{} % {}", lhs, rhs),
             Expression::Pow(lhs, rhs) => write!(f, "{} ^ {}", lhs, rhs),
+            Expression::LessThan(lhs, rhs) => write!(f, "{} < {}", lhs, rhs),
+            Expression::GreaterThan(lhs, rhs) => write!(f, "{} > {}", lhs, rhs),
+            Expression::LessThanOrEqual(lhs, rhs) => write!(f, "{} <= {}", lhs, rhs),
+            Expression::GreaterThanOrEqual(lhs, rhs) => write!(f, "{} >= {}", lhs, rhs),
+            Expression::Equal(lhs, rhs) => write!(f, "{} == {}", lhs, rhs),
+            Expression::NotEqual(lhs, rhs) => write!(f, "{} != {}", lhs, rhs),
         }
     }
 }
