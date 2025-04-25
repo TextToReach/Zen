@@ -1,2 +1,4 @@
-10 defa tekrarla
-    yazdır "sa"
+a = sor(mantıksal) "Öğrenci misiniz: "
+
+10 kere tekrarla
+	yazdır 18-a

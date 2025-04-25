@@ -32,6 +32,34 @@ pub enum Object {
     Null,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum BaseTypes {
+    Number,
+    Text,
+    Array,
+    Bool,
+}
+
+impl BaseTypes {
+    pub const values: [&str; 4] = [
+        "yazı",
+        "sayı",
+        "liste",
+        "mantıksal",
+    ];
+
+    pub fn from_str(s: &str) -> Self {
+        println!("fromstrden {}", s);
+        match s {
+            val if val == Self::values[0] => BaseTypes::Text,
+            val if val == Self::values[1] => BaseTypes::Number,
+            val if val == Self::values[2] => BaseTypes::Array,
+            val if val == Self::values[3] => BaseTypes::Bool,
+            _ => panic!("Error while trying to convert string to BaseType: Unknown type."),
+        }
+    }
+}
+
 impl Object {
     pub fn asNumber(self) -> Number {
         if let Object::Number(val) = self {
@@ -243,7 +271,7 @@ pub enum ZenError {
 pub enum InstructionEnum {
     NoOp,
     Print(Vec<Expression>),
-    Input(Object),
+    Input(Object, BaseTypes),
     Forloop1(i64, Vec<Instruction>),
     VariableDeclaration(String, Expression),
     
@@ -473,9 +501,9 @@ impl<'a> Parsable<'a, char, Object, Simple<char>> for Text {
 
 impl<'a> Parsable<'a, char, Object, Simple<char>> for Boolean {
     fn parser() -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
-        let out = choice([just("true"), just("doğru")])
+        let out = just("true").or(just("doğru"))
             .to(Object::from(true))
-            .or(choice([just("false"), just("yanlış")]).to(Object::from(false)));
+            .or(just("false").or(just("yanlış")).to(Object::from(false)));
 
         Box::new(recursive(|prev| {
             prev.clone().delimited_by(just("("), just(")")).or(out)

@@ -2,7 +2,7 @@ pub mod Input;
 pub mod InstrYieldKit {
     use std::{cell::RefCell, rc::Rc};
     use chumsky::prelude::*;
-    use crate::{library::{Environment::Environment, Methods::{Str, Throw}, Types::{Expression, InstructionEnum, InstructionYield, Object}}, Input};
+    use crate::{library::{Environment::Environment, Methods::{Str, Throw}, Types::{BaseTypes, Expression, InstructionEnum, InstructionYield, Object}}, Input};
     use super::Input;
 
     pub fn newline() -> impl Parser<char, char, Error = Simple<char>> {
@@ -19,8 +19,22 @@ pub mod InstrYieldKit {
 
     pub fn evaluate(obj: InstructionEnum, currentScope: Rc<RefCell<Environment>>) -> Box<Object> {
         match obj {
-            InstructionEnum::Input(args) => {
-                Box::new(Object::from(Input!(format!("{}", args))))
+            InstructionEnum::Input(args, t) => {
+                let input = Input!(format!("{}", args));
+                match t {
+                    BaseTypes::Text => {
+                        Box::new(Object::from(input))
+                    },
+                    BaseTypes::Number => {
+                        let num = input.parse::<f64>().unwrap_or(0.0);
+                        Box::new(Object::from(num))
+                    },
+                    BaseTypes::Bool => {
+                        let boolean = input.parse::<bool>().unwrap_or(false);
+                        Box::new(Object::from(boolean))
+                    },
+                    BaseTypes::Array => todo!()
+                }
             }
             _ => {
                 Throw(Str("Invalid Instruction"), crate::library::Types::ZenError::TypeError, None, None);
