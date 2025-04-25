@@ -1,6 +1,5 @@
-a = sor(sayı) "Bir sayı söyle: "
-
-eğer (a << 10) ise
-	yazdır "Söylediğin sayı 10'dan küçük."
+a = sor(yazı) "Adınız nedir: "
+eğer (a == "Hamza") ise
+	yazdır "Hamza'sınız."
 değilse
-	yazdır "Söylediğin sayı 10'dan büyük veya eşit."
+	yazdır "Hamza değilsiniz."

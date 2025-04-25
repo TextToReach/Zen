@@ -104,7 +104,7 @@ fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bo
                         break;
                     }
                 }
-                
+
             } else if let Some(elseBlock) = elseBlock {
                 let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
                 for instr in elseBlock.iter() {
