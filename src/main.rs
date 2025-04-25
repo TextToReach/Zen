@@ -15,7 +15,7 @@ use library::{
     Methods::Throw,
     Types::{Expression, Instruction, InstructionEnum, Object, ZenError},
 };
-use parsers::instructions::{Kit, Print};
+use parsers::instructions::{InstrKit, Print};
 
 /// Ana CLI aracı
 #[derive(ClapParser, Debug)]
@@ -118,7 +118,7 @@ fn run(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool)
     preprocessor::index(&mut input);
     if printPreprocessOutput { println!("Buffer:\n{}", input.red()); }
     
-    match Kit::parser(ROOT_SCOPE.clone()).parse(input.clone()) {
+    match InstrKit::parser(ROOT_SCOPE.clone()).parse(input.clone()) {
         Ok(results) => {
             if printAst { println!("AST: {:#?}\n\n", results); }
             

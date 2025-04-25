@@ -4,20 +4,20 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use chumsky::prelude::*;
-use crate::library::{Environment::Environment, Types::{Expression, Instruction, InstructionEnum, Object, Parsable, Variable}};
+use crate::library::{Environment::Environment, Types::{Expression, Instruction, InstructionEnum, InstructionYield, Object, Parsable, Variable}};
 
-use super::Kit::whitespace;
+use super::InstrKit::whitespace;
+// use super::super::instruction_yield::InstrYieldKit;
 
 pub fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Instruction, Error = Simple<char>>> {
     Box::new(
         text::ident()
-            .then_ignore(whitespace())
-            .then_ignore(just('='))
-            .then_ignore(whitespace())
+            .then_ignore(just('=').padded_by(whitespace()))
             .then(
-                Expression::parser(currentScope)
+                // InstrYieldKit::parser(currentScope.clone()).or(
+                    Expression::parser(currentScope.clone()).padded_by(whitespace())
+                // )
             )
-            .then_ignore(whitespace())
             .map(|(name, value)| Instruction(InstructionEnum::VariableDeclaration(name, value))),
     )
 }

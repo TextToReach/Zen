@@ -2,10 +2,10 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use chumsky::prelude::*;
+use chumsky::{prelude::*, text::whitespace};
 use crate::library::{Environment::Environment, Types::{Expression, Instruction, InstructionEnum, Object, Parsable, Variable}};
 
-use super::Kit::separator;
+use super::InstrKit::separator;
 
 pub fn parser(currentScope: Rc<RefCell<Environment>>) -> Box<dyn Parser<char, Instruction, Error = Simple<char>>> {
     Box::new(just("yazdır")

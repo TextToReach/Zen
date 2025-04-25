@@ -1,4 +1,2 @@
-a = 20 + 5
-5 kere tekrar et
-	2 kere tekrar et
-		yazdır a
+10 defa tekrarla
+    yazdır "sa"

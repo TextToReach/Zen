@@ -3,12 +3,15 @@
 use chumsky::prelude::*;
 use chumsky::text::whitespace;
 use chumsky::{Parser, error::Simple};
+use num::pow::Pow;
+use num::Float;
 
 use crate::library::Methods::Throw;
 
 use super::Array::Array;
 use super::Environment::Environment;
 use std::cell::RefCell;
+use std::f32::INFINITY;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::rc::Rc;
 use std::{fmt::Display, num::ParseFloatError, str::FromStr};
@@ -201,9 +204,18 @@ impl Rem for Object {
     }
 }
 
-pub trait isInstruction {}
-impl isInstruction for Instruction {}
-impl isInstruction for InstructionYield {}
+impl Pow<Object> for Object {
+    type Output = Object;
+
+    fn pow(self, other: Object) -> Self::Output {
+        match (self, other) {
+            (Object::Number(a), Object::Number(b)) => {
+                Object::Number(Number::from(a.value.pow(b.value)))
+            }
+            _ => panic!("Error while trying to raise an object to another object's power: Objects are not compatible."),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instruction(pub InstructionEnum);
@@ -224,13 +236,14 @@ pub enum ZenError {
     GeneralError,
     NotDeclaredError,
     DivisionByZeroError,
+    TypeError
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
     NoOp,
     Print(Vec<Expression>),
-    Input(Expression),
+    Input(Object),
     Forloop1(i64, Vec<Instruction>),
     VariableDeclaration(String, Expression),
     
@@ -255,6 +268,7 @@ pub enum Expression {
     Mul(Box<Expression>, Box<Expression>),
     Div(Box<Expression>, Box<Expression>),
     Mod(Box<Expression>, Box<Expression>),
+    Pow(Box<Expression>, Box<Expression>),
 }
 
 impl From<Object> for Expression {
@@ -291,6 +305,7 @@ impl Expression {
                     .to(Expression::Mul as fn(_, _) -> _)
                     .or(just('/').to(Expression::Div as fn(_, _) -> _))
                     .or(just('%').to(Expression::Mod as fn(_, _) -> _))
+                    .or(just('^').to(Expression::Pow as fn(_, _) -> _))
                     .padded_by(whitespace());
                 let op_add = just('+')
                     .to(Expression::Add as fn(_, _) -> _)
@@ -341,6 +356,11 @@ impl Expression {
                 let left = lhs.evaluate(currentScope.clone());
                 let right = rhs.evaluate(currentScope.clone());
                 left % right
+            }
+            Expression::Pow(lhs, rhs) => {
+                let left = lhs.evaluate(currentScope.clone());
+                let right = rhs.evaluate(currentScope.clone());
+                left.pow(right)
             }
             Expression::Value(val) => {
                 match **val {
@@ -633,6 +653,7 @@ impl Display for Expression {
             Expression::Mul(lhs, rhs) => write!(f, "{} * {}", lhs, rhs),
             Expression::Div(lhs, rhs) => write!(f, "{} / {}", lhs, rhs),
             Expression::Mod(lhs, rhs) => write!(f, "{} % {}", lhs, rhs),
+            Expression::Pow(lhs, rhs) => write!(f, "{} ^ {}", lhs, rhs),
         }
     }
 }

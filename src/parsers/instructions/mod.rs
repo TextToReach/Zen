@@ -3,10 +3,9 @@
 pub mod Repeat;
 pub mod Print;
 pub mod Variable;
-pub mod Input;
 
 /// Instructions with a different name
-pub mod Kit {
+pub mod InstrKit {
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -15,14 +14,14 @@ pub mod Kit {
     use chumsky::{prelude::*, primitive::OrderedContainer};
     use chumsky::error::Simple;
 
-    use super::{Input, Print, Repeat, Variable};
+    use super::{Print, Repeat, Variable};
 
     pub fn newline() -> impl Parser<char, char, Error = Simple<char>> {
         just('\n')
     }
     
-    pub fn whitespace() -> impl Parser<char, Vec<char>, Error = Simple<char>> {
-        filter(|c: &char| c.is_whitespace() && *c != '\n').repeated()
+    pub fn whitespace() -> Rc<impl Parser<char, Vec<char>, Error = Simple<char>>> {
+        Rc::new(filter(|c: &char| c.is_whitespace() && *c != '\n').repeated())
     }
 
     pub fn separator<'a>() -> impl Parser<char, &'a str, Error = Simple<char>> {
@@ -38,7 +37,6 @@ pub mod Kit {
                     Repeat::parser(instr_parser),
                     Variable::parser(currentScope.clone()),
                     Box::new(whitespace().to(Instruction(InstructionEnum::NoOp))),
-                    Input::parser(currentScope.clone()),
                 ])
             }).separated_by(newline())
         )
