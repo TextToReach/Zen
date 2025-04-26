@@ -299,7 +299,7 @@ pub enum InstructionEnum {
     VariableDeclaration(String, Expression),
     If{
         ifBlock: IfBlockStructure,
-        elifBlocks: Option<Vec<IfBlockStructure>>,
+        elifBlocks: Vec<IfBlockStructure>,
         elseBlock: Option<Vec<Instruction>>,
     },
     

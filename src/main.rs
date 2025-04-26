@@ -4,7 +4,7 @@ mod library;
 mod parsers;
 mod features;
 
-use std::{cell::RefCell, fs::File, io::Read, ops::Deref, rc::Rc};
+use std::{cell::RefCell, fs::File, io::Read, ops::{Deref, Not}, rc::Rc};
 
 use chumsky::{Parser, prelude::*, primitive::Choice};
 use clap::{Parser as ClapParser, Subcommand};
@@ -92,23 +92,27 @@ fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bo
                 for instr in ifBlock.onSuccess.iter() {
                     process(instr.clone(), innerScope.clone(), verbose);
                 }
-            } else if let Some(elifBlocks) = elifBlocks {
-
+            } else {
+                let mut elifSucceeded = false;
                 for elifBlock in elifBlocks {
                     let elifCondition = elifBlock.condition.evaluate(currentScope.clone()).isTruthy();
-                    if elifCondition {
-                        let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
-                        for instr in elifBlock.onSuccess.iter() {
+                    if elifCondition { // If elif succeeds ...
+                        let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone()))); // These scopes probably need to be worked on later.
+                        for instr in elifBlock.onSuccess.iter() { // ... Execute the instructions
+                            elifSucceeded = true;
                             process(instr.clone(), innerScope.clone(), verbose);
                         }
                         break;
                     }
                 }
 
-            } else if let Some(elseBlock) = elseBlock {
-                let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
-                for instr in elseBlock.iter() {
-                    process(instr.clone(), innerScope.clone(), verbose);
+                if !elifSucceeded {
+                    if let Some(elseBlock) = elseBlock {
+                        let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
+                        for instr in elseBlock.iter() {
+                            process(instr.clone(), innerScope.clone(), verbose);
+                        }
+                    }
                 }
 
             }
@@ -150,7 +154,6 @@ fn run(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool)
     match InstrKit::parser(ROOT_SCOPE.clone()).parse(input.clone()) {
         Ok(results) => {
             if printAst { println!("AST: {:#?}\n\n", results); }
-            
 
             for result in results {
                 process(result, ROOT_SCOPE.clone(), verbose);

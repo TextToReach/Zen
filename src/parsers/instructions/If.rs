@@ -22,7 +22,30 @@ pub fn ifParser<'a>(
             .then(
                 just('\t').ignore_then(instr_parser.clone()).separated_by(newline()).at_least(1)
             )
-            .map(|(condition, onSuccess)| (condition, onSuccess))
+            .then(
+                newline()
+                    .then_ignore(just("değilse ve"))
+                    .then_ignore(whitespace())
+                    .then( Expression::parser(currentScope.clone()).delimited_by(just("("), just(")")) )
+                    .then_ignore(whitespace())
+                    .then_ignore(just("ise"))
+                    .then_ignore(newline())
+                    .then(
+                        just('\t')
+                            .ignore_then(instr_parser.clone())
+                            .separated_by(newline())
+                            .at_least(1)
+                    )
+                    .repeated()
+                    .map(|vec| {
+                        vec.into_iter()
+                            .map(|((_, condition), instructions)| IfBlockStructure {
+                                condition,
+                                onSuccess: instructions
+                            })
+                            .collect::<Vec<_>>()
+                    })
+            )
             .then(
                 newline()
                     .then_ignore(just("değilse"))
@@ -39,13 +62,12 @@ pub fn ifParser<'a>(
             )
             .then_ignore(newline().or_not())
             .map(
-                |((ifCondition, ifOnSuccess), elseBlock)| 
-                {
+                |((if_block, elif_blocks), else_block)| {
                     Instruction(
                         InstructionEnum::If {
-                            ifBlock: IfBlockStructure { condition: ifCondition, onSuccess: ifOnSuccess },
-                            elifBlocks: None,
-                            elseBlock,
+                            ifBlock: IfBlockStructure { condition: if_block.0, onSuccess: if_block.1 },
+                            elifBlocks: elif_blocks,
+                            elseBlock: else_block,
                         }
                     )
                 }
