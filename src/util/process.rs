@@ -74,7 +74,7 @@ pub fn index(input: &mut Vec<String>) {
             match Collection::expression().parse(clean_line_feed.clone()) {
                 Ok(x) => {
                     let feedIndentLevel = line_feed.count_from_start(|x| x.token == TokenTable::Tab);
-                    println!("x: {:#?}", clean_line_feed);
+                    println!("x: {:#?}", x);
                     // processLine(line_feed, x, &mut currentScope, &mut manager);
                 }
                 Err(e) => {

@@ -34,40 +34,29 @@ pub fn expression() -> impl Parser<TokenData, Expression, Error = Simple<TokenDa
 			x.token == TokenTable::StringLiteral || x.token == TokenTable::NumberLiteral || x.token == TokenTable::BooleanLiteral || x.token == TokenTable::Identifier
 		}).map(|x| Value(Box::new(x)));
 		
-		let mul_operator = .()
+		let mul_operator = just(TokenData::default(TokenTable::OperatorMultiply)).or(just(TokenData::default(TokenTable::OperatorDivide))).or(just(TokenData::default(TokenTable::OperatorMod)));
+		let add_operator = just::<_, _, Simple<TokenData>>(TokenData::default(TokenTable::OperatorAdd))
+			.or(just::<_, _, Simple<TokenData>>(TokenData::default(TokenTable::OperatorSubtract)));
 		let mul = obj.clone()
 			.then(
-				operationPriority1
+				mul_operator
 					.clone()
 					.then(obj.clone())
 					.repeated()
-			)
-			.map(|(left, ops)| {
-				ops.into_iter().fold(left, |lhs, (op, rhs)| {
-					match op.slice.as_str() {
-						"*" => Mul(Box::new(lhs), Box::new(rhs)),
-						"/" => Div(Box::new(lhs), Box::new(rhs)),
-						"%" => Mod(Box::new(lhs), Box::new(rhs)),
-						_ => unreachable!()
-					}
-				})
-		});
-		
+			).foldl(|lhs, (op, rhs)| {
+				op.toOp()(Box::new(lhs), Box::new(rhs))
+			});
 		let add = mul.clone()
 			.then(
-				operationPriority2
-					.then(mul.clone())
+				add_operator
+					.clone()
+					.then(mul)
 					.repeated()
-			)
-			.map(|(lhs, ops)| {
-				ops.into_iter().fold(lhs, |lhs, (op, rhs)| {
-					match op.slice.as_str() {
-						"+" => Add(Box::new(lhs), Box::new(rhs)),
-						"-" => Sub(Box::new(lhs), Box::new(rhs)),
-						_ => unreachable!()
-					}
-				})
-		});
+			).foldl(|lhs, (op, rhs)| {
+				op.toOp()(Box::new(lhs), Box::new(rhs))
+			});
+
+		
 
 		add
 	// });

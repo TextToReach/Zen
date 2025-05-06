@@ -4,8 +4,8 @@ use std::{
 	slice::SliceIndex,
 };
 
-use crate::library::Types::{Expression, Object, Operator};
-use chumsky::Error;
+use crate::{library::Types::{Object, Operator}, parsers::Collection::{self, Expression}};
+use chumsky::{error::Simple, Error, Parser};
 use colored::Colorize;
 use const_format::concatcp;
 use logos::Logos;
@@ -191,6 +191,17 @@ impl TokenData {
 			token,
 			slice: "".to_owned(),
 			span: 0..0,
+		}
+	}
+
+	pub fn toOp(&self) -> fn(Box<Collection::Expression>, Box<Collection::Expression>) -> Collection::Expression {
+		match self.token {
+			TokenTable::OperatorAdd => Collection::Expression::Add,
+			TokenTable::OperatorSubtract => Collection::Expression::Sub,
+			TokenTable::OperatorMultiply => Collection::Expression::Mul,
+			TokenTable::OperatorDivide => Collection::Expression::Div,
+			TokenTable::OperatorMod => Collection::Expression::Mod,
+			_ => panic!()
 		}
 	}
 
