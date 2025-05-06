@@ -1,9 +1,1 @@
-isim = sor(yazı) "Adınız nedir: "
-eğer (isim == "Hamza") ise
-	yazdır "Hamza'sınız."
-değilse ve (isim == "Eymen") ise
-	yazdır "Eymen'siniz."
-değilse ve (isim == "Ege") ise
-	yazdır "Ege'siniz."
-değilse
-	yazdır "Üçü de değilsiniz."
+5 + 10

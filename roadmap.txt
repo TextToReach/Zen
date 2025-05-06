@@ -1,1 +1,11 @@
 1. Hatalarda lokasyon görüntülenebilmesi için parser'ın satır ve sırayı göstermesini sağla (örn: ( Variable("a"), ("somefile.zen", (12, 13)) ) demek somefile.zen dosyasının 12. satırındaki 13. karakterden itibaren bir a değişkeni var. Burada bir hata çıkarsa Throw mekanizmasında bunun görünmesi gerekiyor.).
+
+2. Gelecek bloklar:
+- Break
+- Continue
+- ... olana kadar tekrarla
+- ... olmadığı sürece tekrarla
+- Sürekli tekrarla
+- 1 ile 100 arasında dolaş (i)
+
+3. Türkçe karakter desteği (umarım projenin ağzına sıçmaz)

@@ -1,178 +1,99 @@
 #![allow(non_snake_case)]
 
+mod features;
 mod library;
 mod parsers;
-mod features;
+mod util;
 
-use std::{cell::RefCell, fs::File, io::Read, ops::{Deref, Not}, rc::Rc};
+use std::{
+	cell::RefCell,
+	char::decode_utf16,
+	fs::{File, read_to_string},
+	io::Read,
+	ops::{Deref, Not},
+	os::unix::thread,
+	rc::Rc,
+	thread::sleep,
+	time::Duration,
+};
 
 use chumsky::{Parser, prelude::*, primitive::Choice};
 use clap::{Parser as ClapParser, Subcommand};
 use colored::Colorize;
-use features::preprocessor;
-use library::{
-    Environment::Environment,
-    Methods::Throw,
-    Types::{Comparison, Expression, Instruction, InstructionEnum, Object, ZenError},
+use features::{
+	preprocessor,
+	tokenizer::{self, TokenData, TokenTable},
 };
-use parsers::instructions::{InstrKit, Print};
+use library::{
+	Environment::Environment,
+	Methods::Throw,
+	Types::{Comparison, Expression, LegacyInstruction, LegacyInstructionEnum, Object, Severity, ZenError},
+};
+use util::process;
 
 /// Ana CLI aracı
 #[derive(ClapParser, Debug)]
 #[command(author = "...", version = "0.0.1+ALPHA", about = "Zen CLI")]
 struct Cli {
-    #[command(subcommand)]
-    command: Commands,
+	#[command(subcommand)]
+	command: Commands,
 }
 
 /// Alt komutlar
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Dosya çalıştırma komutu
-    Run {
-        /// İşlenecek dosya adı
-        file: String,
+	/// Dosya çalıştırma komutu
+	Run {
+		/// İşlenecek dosya adı
+		file: String,
 
-        /// Ayrıntılı çıktı göster
-        #[arg(short, long, default_value_t = false)]
-        verbose: bool,
+		/// Ayrıntılı çıktı göster
+		#[arg(short, long, default_value_t = false)]
+		verbose: bool,
 
-        /// AST çıktısını göster
-        #[arg(long, default_value_t = false)]
-        printast: bool,
+		/// AST çıktısını göster
+		#[arg(long, default_value_t = false)]
+		printast: bool,
 
-        #[arg(long, default_value_t = false)]
-        printpreprocessoutput: bool,
-    },
+		#[arg(long, default_value_t = false)]
+		printpreprocessoutput: bool,
+
+		#[arg(long, default_value_t = false)]
+		noexecute: bool,
+	},
 }
 
-/// Resolve the object to its final value (gets the value of variables)
-fn resolve(obj: Object, currentScope: Rc<RefCell<Environment>>) -> Object {
-    match obj {
-        Object::Expression(expr) => {
-            expr.evaluate(currentScope.clone())
-        }
-        _ => {obj},
-    }
-}
+fn run_zen_file(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool, noexecute: bool) {
+	let contents = match File::open(&file) { Ok(res) => { let lines = read_to_string(file); match lines { Ok(lines) => { let mut buffr = Vec::new(); for line in lines.lines() { buffr.push(line.to_string()); } buffr } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } } } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } };
+	let ROOT_SCOPE = Rc::new(RefCell::new(Environment::new()));
 
-fn process(AST: Instruction, currentScope: Rc<RefCell<Environment>>, verbose: bool) {
-    let InstructionVariant = AST.0;
-
-    match InstructionVariant {
-        InstructionEnum::Print(Objects) => {
-            let resolved_objects: Vec<_> = Objects.clone()
-                .into_iter()
-                .map(|obj| resolve(obj.evaluate(currentScope.clone()), currentScope.clone()))
-                .collect();
-            
-
-            PrintVec!(&resolved_objects);
-            if verbose { PrettyDebugVec!(resolved_objects); }
-        }
-        InstructionEnum::Forloop1(RepeatCount, Instructions) => {
-            let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
-
-            for index in 0..RepeatCount {
-                for instr in Instructions.iter() {
-                    process(instr.clone(), innerScope.clone(), verbose);
-                }
-            }
-        }
-        InstructionEnum::VariableDeclaration(Name, Value) => {
-            let value = Value.evaluate(currentScope.clone());
-            
-            currentScope.borrow_mut().set(&Name, value);
-        }
-        InstructionEnum::If { ifBlock, elifBlocks, elseBlock } => {
-            let ifCondition = ifBlock.condition.evaluate(currentScope.clone()).isTruthy();
-
-            if ifCondition {
-                let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
-                for instr in ifBlock.onSuccess.iter() {
-                    process(instr.clone(), innerScope.clone(), verbose);
-                }
-            } else {
-                let mut elifSucceeded = false;
-                for elifBlock in elifBlocks {
-                    let elifCondition = elifBlock.condition.evaluate(currentScope.clone()).isTruthy();
-                    if elifCondition { // If elif succeeds ...
-                        let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone()))); // These scopes probably need to be worked on later.
-                        for instr in elifBlock.onSuccess.iter() { // ... Execute the instructions
-                            elifSucceeded = true;
-                            process(instr.clone(), innerScope.clone(), verbose);
-                        }
-                        break;
-                    }
-                }
-
-                if !elifSucceeded {
-                    if let Some(elseBlock) = elseBlock {
-                        let innerScope = Rc::new(RefCell::new(Environment::with_parent(currentScope.clone())));
-                        for instr in elseBlock.iter() {
-                            process(instr.clone(), innerScope.clone(), verbose);
-                        }
-                    }
-                }
-
-            }
-        }
-        _ => {}
-    }
-}
-
-fn run(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool) {
-    let mut input = match File::open(file) {
-        Ok(res) => {
-            let mut buffr = String::new();
-            let mut res = res;
-            match res.read_to_string(&mut buffr) {
-                Ok(_) => {}
-                Err(_) => Throw(
-                    "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(),
-                    library::Types::ZenError::GeneralError,
-                    None,
-                    None,
-                ),
-            }
-            buffr
-        }
-        Err(_) => {
-            Throw(
-                "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(),
-                library::Types::ZenError::GeneralError,
-                None,
-                None,
-            );
-            String::from("")
-        }
-    };
-    let ROOT_SCOPE = Rc::new(RefCell::new(Environment::new()));
-    preprocessor::index(&mut input);
-    if printPreprocessOutput { println!("Buffer:\n{}", input.red()); }
-    
-    match InstrKit::parser(ROOT_SCOPE.clone()).parse(input.clone()) {
-        Ok(results) => {
-            if printAst { println!("AST: {:#?}\n\n", results); }
-
-            for result in results {
-                process(result, ROOT_SCOPE.clone(), verbose);
-            }
-        }
-        Err(errors) => {
-            for error in errors {
-                println!("Hata: {:?}", error);
-            }
-        }
-    }
+	process::index(&mut contents.clone());
 }
 
 fn main() {
-    let cli = Cli::parse();
+	let cli = Cli::parse();
+	ctrlc::set_handler(move || {
+        println!("\nProgram sonlandırılıyor...");
+        std::process::exit(0);
+    }).unwrap_or_else(|_| {
+        Throw(
+            format!("Uyarı: Zen {} sinyalini yakalamaya çalışırken bir sorun yaşandı. Program içerisinde bu sinyalle karşılaşılırsa tanımsız durumlarla karşılaşılabilir.\nNot: Bu uyarıyı susturmak için programınızı \"zen --silenced\" ile başlatmayı deneyebilirsiniz.", "(Ctrl+C / Interrupt)".red().italic()),
+            ZenError::UnknownError,
+            None,
+            None,
+            Severity::Low
+        );
+    });
 
-    match cli.command {
-        Commands::Run { file, verbose, printast, printpreprocessoutput } => {
-            run(file, verbose, printast, printpreprocessoutput);
-        }
-    }
+	match cli.command {
+		Commands::Run {
+			file,
+			verbose,
+			printast,
+			printpreprocessoutput,
+			noexecute,
+		} => {
+			run_zen_file(file, verbose, printast, printpreprocessoutput, noexecute);
+		}
+	}
 }
