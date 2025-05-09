@@ -3,7 +3,7 @@
 use std::process::exit;
 
 use super::Types::{Severity, ZenError};
-use colored::{ColoredString, Colorize};
+use colored::Colorize;
 
 pub fn Str(val: &str) -> String {
 	String::from(val)

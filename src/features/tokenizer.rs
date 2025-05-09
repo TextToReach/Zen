@@ -1,22 +1,12 @@
+#![allow(dead_code)]
+
 use std::{
-	fmt::{Debug, Display, write},
-	ops::{Deref, Range},
-	slice::SliceIndex,
+	fmt::{Debug, Display},
+	ops::Range,
 };
 
-use crate::{library::Types::{Object, Operator}, parsers::Collection::{self, Expression}};
-use chumsky::{error::Simple, Error, Parser};
-use colored::Colorize;
-use const_format::concatcp;
+use crate::{library::Types::Object, parsers::Parsers::Expression};
 use logos::Logos;
-use tabled::{
-	Table, Tabled,
-	assert::assert_table,
-	settings::{
-		Alignment, Color, Format, Modify, Style, Width,
-		object::{Columns, ObjectIterator, Rows, Segment},
-	},
-};
 
 #[derive(Clone, Logos, Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub enum TokenTable {
@@ -101,6 +91,7 @@ pub enum TokenTable {
 
 	#[regex(r"[ \n\r]+", logos::skip)]
 	Error,
+
 }
 
 #[derive(Debug)]
@@ -194,15 +185,17 @@ impl TokenData {
 		}
 	}
 
-	pub fn toOp(&self) -> fn(Box<Collection::Expression>, Box<Collection::Expression>) -> Collection::Expression {
+	pub fn toOp(&self) -> fn(Box<Expression>, Box<Expression>) -> Expression {
 		match self.token {
-			TokenTable::OperatorAdd => Collection::Expression::Add,
-			TokenTable::OperatorSubtract => Collection::Expression::Sub,
-			TokenTable::OperatorMultiply => Collection::Expression::Mul,
-			TokenTable::OperatorDivide => Collection::Expression::Div,
-			TokenTable::OperatorMod => Collection::Expression::Mod,
+			TokenTable::OperatorAdd => Expression::Add,
+			TokenTable::OperatorSubtract => Expression::Sub,
+			TokenTable::OperatorMultiply => Expression::Mul,
+			TokenTable::OperatorDivide => Expression::Div,
+			TokenTable::OperatorMod => Expression::Mod,
 			_ => panic!()
 		}
+
+		
 	}
 
 	pub fn asNumberLiteral(&self) -> f64 {
@@ -228,9 +221,18 @@ impl TokenData {
 			_ => false,
 		}
 	}
+
+	pub fn asObject(&self) -> Object {
+		match self.token {
+			TokenTable::StringLiteral => Object::from(self.asStringLiteral()),
+			TokenTable::NumberLiteral => Object::from(self.asNumberLiteral()),
+			TokenTable::BooleanLiteral => Object::from(self.asBooleanLiteral()),
+			_ => panic!("Unsupported token type for conversion to Object."),
+		}
+	}
 }
 
-trait RemoveQuotes {
+pub trait RemoveQuotes {
 	fn remove_quotes(&self) -> String;
 }
 
@@ -279,7 +281,7 @@ impl Eq for TokenData {}
 #[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
 	NoOp,
-	Print(Vec<TokenData>),
+	Print(Vec<Expression>),
 	Input(Vec<TokenData>),
 	Repeat(f64),
 	WhileTrue(Vec<TokenData>),

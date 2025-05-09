@@ -1,7 +1,5 @@
 #![allow(non_snake_case)]
 
-pub mod Array;
-pub mod Environment;
 pub mod Methods;
 pub mod Types;
 

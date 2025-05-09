@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, fmt::{write, Display}};
 
 use crate::{features::tokenizer::InstructionEnum, library::Types::Object};
 
@@ -10,6 +10,12 @@ pub enum ScopeAction {
     IfBlock,
     ElifBlock,
     ElseBlock
+}
+
+impl Display for ScopeAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -61,9 +67,9 @@ impl ScopeManager {
         id
     }
 
-    pub fn push_code_to_scope(&mut self, id: usize, instr: InstructionEnum) {
+    pub fn push_code_to_scope(&mut self, id: usize, instr: &InstructionEnum) {
         if let Some(Scope) = self.get_scope_mut(id) {
-            Scope.block.push(instr);
+            Scope.block.push(instr.clone());
         }
     }
 

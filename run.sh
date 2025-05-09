@@ -1,0 +1,1 @@
+cargo -q run -- run index.zen

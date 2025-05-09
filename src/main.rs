@@ -7,14 +7,8 @@ mod util;
 
 use std::{
 	cell::RefCell,
-	char::decode_utf16,
 	fs::{File, read_to_string},
-	io::Read,
-	ops::{Deref, Not},
-	os::unix::thread,
 	rc::Rc,
-	thread::sleep,
-	time::Duration,
 };
 
 use chumsky::{Parser, prelude::*, primitive::Choice};
@@ -25,9 +19,8 @@ use features::{
 	tokenizer::{self, TokenData, TokenTable},
 };
 use library::{
-	Environment::Environment,
 	Methods::Throw,
-	Types::{Comparison, Expression, LegacyInstruction, LegacyInstructionEnum, Object, Severity, ZenError},
+	Types::{Severity, ZenError},
 };
 use util::process;
 
@@ -65,14 +58,12 @@ enum Commands {
 
 fn run_zen_file(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool, noexecute: bool) {
 	let contents = match File::open(&file) { Ok(res) => { let lines = read_to_string(file); match lines { Ok(lines) => { let mut buffr = Vec::new(); for line in lines.lines() { buffr.push(line.to_string()); } buffr } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } } } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } };
-	let ROOT_SCOPE = Rc::new(RefCell::new(Environment::new()));
-
 	process::index(&mut contents.clone());
 }
 
 fn main() {
 	let cli = Cli::parse();
-	ctrlc::set_handler(move || {
+	ctrlc::set_handler(|| {
         println!("\nProgram sonlandırılıyor...");
         std::process::exit(0);
     }).unwrap_or_else(|_| {
