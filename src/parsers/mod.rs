@@ -8,14 +8,15 @@ pub mod If;
 pub mod Parsers {
 	use std::fmt::Display;
 	use std::rc::Rc;
-
+	use crate::features::tokenizer::AssignmentMethod;
 	use crate::features::tokenizer::InstructionEnum;
 	use crate::features::tokenizer::TokenData;
 	use crate::features::tokenizer::TokenTable;
 	use crate::library::Types::Object;
+use crate::util::ScopeManager::ScopeManager;
 	use chumsky::prelude::*;
 	use num::pow::Pow;
-
+	use super::DefineVariable;
 	use super::Print;
 	use super::Repeat;
 	use super::If;
@@ -29,7 +30,7 @@ pub mod Parsers {
 	}
 
 	pub fn tab() -> Box<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>> {
-		Box::new(just(TokenData::default(TokenTable::Tab)))
+		Box::new(just(TokenTable::Tab.asTokenData()))
 	}
 
 	pub fn WithIndentation(inp: ParserType1) -> ParserType2 {
@@ -46,6 +47,7 @@ pub mod Parsers {
                 WithIndentation(Repeat::parser()),
                 WithIndentation(If::parser()),
 				WithoutIndentation(Print::parser()),
+				WithoutIndentation(DefineVariable::parser()),
             ])
 		}))
 	}
@@ -69,57 +71,63 @@ pub mod Parsers {
 	}
 
 	impl Expression {
-		pub fn evaluate(&self) -> Object {
+		pub fn evaluate(&self, currentScope: usize, manager: &mut ScopeManager) -> Object {
 			match self {
-				Expression::Value(val) => *val.clone(),
+				Expression::Value(val) => {
+					if let Object::Variable(name) = *val.clone() {
+						manager.get_var(currentScope, name).unwrap()
+					} else {
+						*val.clone()
+					}
+				},
 				Expression::Add(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					left + right
 				}
 				Expression::Sub(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					left - right
 				}
 				Expression::Mul(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					left * right
 				}
 				Expression::Div(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					left / right
 				}
 				Expression::Mod(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					left % right
 				}
 				Expression::Pow(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					left.pow(right)
 				}
-				Expression::LessThan(lhs, rhs) => Object::from(lhs.evaluate() < rhs.evaluate()),
-				Expression::GreaterThan(lhs, rhs) => Object::from(lhs.evaluate() > rhs.evaluate()),
-				Expression::LessThanOrEqual(lhs, rhs) => Object::from(lhs.evaluate() <= rhs.evaluate()),
-				Expression::GreaterThanOrEqual(lhs, rhs) => Object::from(lhs.evaluate() >= rhs.evaluate()),
+				Expression::LessThan(lhs, rhs) => Object::from(lhs.evaluate(currentScope, manager) < rhs.evaluate(currentScope, manager)),
+				Expression::GreaterThan(lhs, rhs) => Object::from(lhs.evaluate(currentScope, manager) > rhs.evaluate(currentScope, manager)),
+				Expression::LessThanOrEqual(lhs, rhs) => Object::from(lhs.evaluate(currentScope, manager) <= rhs.evaluate(currentScope, manager)),
+				Expression::GreaterThanOrEqual(lhs, rhs) => Object::from(lhs.evaluate(currentScope, manager) >= rhs.evaluate(currentScope, manager)),
 				Expression::Equal(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					(left == right).into()
 				}
 				Expression::NotEqual(lhs, rhs) => {
-					let left = lhs.evaluate();
-					let right = rhs.evaluate();
+					let left = lhs.evaluate(currentScope, manager);
+					let right = rhs.evaluate(currentScope, manager);
 					(left != right).into()
 				}
 			}
 		}
-		pub fn isTruthy(&self) -> bool {
-			self.evaluate().isTruthy()
+		pub fn isTruthy(&self, currentScope: usize, manager: &mut ScopeManager) -> bool {
+			self.evaluate(currentScope, manager).isTruthy()
 		}
 	}
 
@@ -163,19 +171,19 @@ pub mod Parsers {
         let expr = recursive(|expr| {
             let atom = Rc::new(object().or(expr.delimited_by(paren_left, paren_right)));
             
-            let mul_operator = just(TokenData::default(TokenTable::MathOperatorMultiply))
-                .or(just(TokenData::default(TokenTable::MathOperatorDivide)))
-                .or(just(TokenData::default(TokenTable::MathOperatorMod)));
+            let mul_operator = just(TokenTable::MathOperatorMultiply.asTokenData())
+                .or(just(TokenTable::MathOperatorDivide.asTokenData()))
+                .or(just(TokenTable::MathOperatorMod.asTokenData()));
 
-            let add_operator = just(TokenData::default(TokenTable::MathOperatorAdd))
-                .or(just(TokenData::default(TokenTable::MathOperatorSubtract)));
+            let add_operator = just(TokenTable::MathOperatorAdd.asTokenData())
+                .or(just(TokenTable::MathOperatorSubtract.asTokenData()));
 
 			let comparison_operator = choice([
-				just::<_, _, Simple<TokenData>>(TokenData::default(TokenTable::ComparisonOperatorEqual)),
-				just::<_, _, Simple<TokenData>>(TokenData::default(TokenTable::ComparisonOperatorGreaterThan)),
-				just::<_, _, Simple<TokenData>>(TokenData::default(TokenTable::ComparisonOperatorGreaterThanOrEqual)),
-				just::<_, _, Simple<TokenData>>(TokenData::default(TokenTable::ComparisonOperatorLessThan)),
-				just::<_, _, Simple<TokenData>>(TokenData::default(TokenTable::ComparisonOperatorLessThanOrEqual)),
+				just(TokenTable::ComparisonOperatorEqual.asTokenData()),
+				just(TokenTable::ComparisonOperatorGreaterThan.asTokenData()),
+				just(TokenTable::ComparisonOperatorGreaterThanOrEqual.asTokenData()),
+				just(TokenTable::ComparisonOperatorLessThan.asTokenData()),
+				just(TokenTable::ComparisonOperatorLessThanOrEqual.asTokenData()),
 			]);
 
             let mul = atom
@@ -201,10 +209,18 @@ pub mod Parsers {
 	pub fn parens() -> (
 		Rc<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>>,
 		Rc<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>>,
-	) {
-		(
-			Rc::new(filter(|x: &TokenData| x.token == TokenTable::LPAREN)),
-			Rc::new(filter(|x: &TokenData| x.token == TokenTable::RPAREN)),
+	) {(
+		Rc::new(filter(|x: &TokenData| x.token == TokenTable::LPAREN)),
+		Rc::new(filter(|x: &TokenData| x.token == TokenTable::RPAREN)),
+	)}
+
+	pub fn assignment_operator() -> Box<dyn Parser<TokenData, AssignmentMethod, Error = Simple<TokenData>>> {
+		Box::new(
+			just(TokenTable::AssignmentOperatorSet.asTokenData()).to(AssignmentMethod::Set)
+			.or(just(TokenTable::AssignmentOperatorAdd.asTokenData()).to(AssignmentMethod::Add))
+			.or(just(TokenTable::AssignmentOperatorSubtract.asTokenData()).to(AssignmentMethod::Sub))
+			.or(just(TokenTable::AssignmentOperatorMultiply.asTokenData()).to(AssignmentMethod::Mul))
+			.or(just(TokenTable::AssignmentOperatorDivide.asTokenData()).to(AssignmentMethod::Div))
 		)
 	}
 

@@ -5,7 +5,7 @@ use std::{
 	ops::Range,
 };
 
-use crate::{library::Types::Object, parsers::Parsers::Expression, util::process::ExecuteLine};
+use crate::{library::Types::Object, parsers::Parsers::Expression, util::{process::ExecuteCode, ScopeManager::ScopeAction}};
 use logos::Logos;
 
 #[derive(Clone, Logos, Debug, PartialEq, PartialOrd, Hash, Eq)]
@@ -243,6 +243,7 @@ impl TokenData {
 			TokenTable::NumberLiteral => Object::from(self.asNumberLiteral()),
 			TokenTable::NegativeNumberLiteral => Object::from(self.asNumberLiteral()),
 			TokenTable::BooleanLiteral => Object::from(self.asBooleanLiteral()),
+			TokenTable::Identifier => Object::Variable(self.slice.clone()),
 			_ => panic!("Unsupported token type for conversion to Object."),
 		}
 	}
@@ -295,25 +296,49 @@ impl PartialEq for TokenData {
 impl Eq for TokenData {}
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum AssignmentMethod {
+	Set,
+	Add,
+	Sub,
+	Mul,
+	Div
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
 	NoOp,
 	Print(Vec<Expression>),
 	Input(Vec<TokenData>),
 	Repeat(f64),
-	WhileTrue(Vec<TokenData>),
+	WhileTrue,
 	IfBlock(Expression),
 	ElifBlock(Expression),
 	ElseBlock(Expression),
-	VariableDeclaration(Vec<TokenData>),
+	VariableDeclaration(String, Expression, AssignmentMethod),
 	Break(Vec<TokenData>),
 	Continue(Vec<TokenData>),
+	Block(usize)
 }
 
-pub trait ExecuteAll { fn execute_all(&self); }
-impl ExecuteAll for Vec<InstructionEnum> {
-	fn execute_all(&self) {
-		for instr in self {
-			ExecuteLine(instr);
+impl InstructionEnum {
+	pub fn is_block(&self) -> bool {
+		matches!(
+			self,
+			InstructionEnum::IfBlock(_) |
+			InstructionEnum::ElifBlock(_) |
+			InstructionEnum::ElseBlock(_) |
+			InstructionEnum::WhileTrue |
+			InstructionEnum::Repeat(_)
+		)
+	}
+	pub fn as_block_action(&self) -> ScopeAction {
+		match self {
+			InstructionEnum::IfBlock(x) => ScopeAction::IfBlock(x.clone()),
+			InstructionEnum::ElifBlock(x) => ScopeAction::ElifBlock(x.clone()),
+			InstructionEnum::ElseBlock(x) => ScopeAction::ElseBlock(x.clone()),
+			InstructionEnum::WhileTrue => ScopeAction::WhileTrue,
+			InstructionEnum::Repeat(x) => ScopeAction::Repeat(*x),
+			_ => panic!()
 		}
 	}
 }

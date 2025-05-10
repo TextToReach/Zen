@@ -1,4 +1,2 @@
-eğer 5 << 10 ise
-	yazdır "yey"
-	yazdır "yey"
-	yazdır "yey"
+a = 10
+yazdır a + 5

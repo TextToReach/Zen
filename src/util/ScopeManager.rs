@@ -8,8 +8,8 @@ pub enum ScopeAction {
     Repeat(f64),
     WhileTrue,
     IfBlock(Expression),
-    ElifBlock,
-    ElseBlock
+    ElifBlock(Expression),
+    ElseBlock(Expression)
 }
 
 impl Display for ScopeAction {
@@ -28,7 +28,7 @@ pub struct Scope {
     pub variables: HashMap<String, Object>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScopeManager {
     scopes: HashMap<usize, Scope>,
     next_id: usize,
@@ -134,7 +134,8 @@ impl ScopeManager {
     }
 
     /// Use this to retrieve variables.
-    pub fn get_var(&self, mut scope_id: usize, name: &str) -> Option<Object> {
+    pub fn get_var<T: AsRef<str>>(&self, mut scope_id: usize, name: T) -> Option<Object> {
+        let name = name.as_ref();
         loop {
             if let Some(value) = self.get_var_in_scope(scope_id, name) {
                 return Some(value);

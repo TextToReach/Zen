@@ -7,7 +7,7 @@ use chumsky::prelude::*;
 
 pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>> {
 	let out = Parsers::number()
-		.then_ignore(just(TokenData::default(TokenTable::KeywordNDefaTekrarla))) // The header
+		.then_ignore(just(TokenTable::KeywordNDefaTekrarla.asTokenData())) 
 		.map(|a| InstructionEnum::Repeat(a.asNumberLiteral()) );
 
 	return Box::new(out);

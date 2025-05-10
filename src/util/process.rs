@@ -1,5 +1,5 @@
 use super::{ScopeManager::Scope, Util::generate_8_digit_id};
-use crate::features::tokenizer::{ExecuteAll, RemoveQuotes};
+use crate::features::tokenizer::RemoveQuotes;
 use crate::{
 	DebugVec, Print, PrintVec,
 	features::tokenizer::{InstructionEnum, TokenData, TokenTable, tokenize},
@@ -12,31 +12,44 @@ use colored::Colorize;
 use defer::defer;
 use std::collections::{HashMap, HashSet};
 
-pub fn ExecuteLine(line: &InstructionEnum) {
+pub fn ExecuteCode(line: &InstructionEnum, scope_id: usize, manager: &mut ScopeManager) {
 	match line.clone() {
 		InstructionEnum::Print(expr) => {
-			PrintVec!(expr.iter().map(|x| x.evaluate()).collect::<Vec<_>>());
+			PrintVec!(expr.iter().map(|x| x.evaluate(scope_id, manager)).collect::<Vec<_>>());
+		}
+		InstructionEnum::Block(n) => {
+			ExecuteBlock(n, manager);
+		}
+		InstructionEnum::VariableDeclaration(name, value, method) => {
+			let evaluated_value = value.evaluate(scope_id, manager);
+			manager.define_var(scope_id, name, evaluated_value);
 		}
 		_ => todo!(),
-	}
+	}	
 }
 
-pub fn ExecuteScope(scope: &Scope) {
-	match scope.clone().action {
+pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) {
+	let scope = manager.get_scope(scope_id).unwrap().clone();
+	let block = scope.block.clone();
+	match scope.action {
 		None => {
-			for instr in scope.clone().block {
-				ExecuteLine(&instr);
+			for instr in block.iter() {
+				ExecuteCode(instr, scope_id, manager);
 			}
 		}
 		Some(act) => match act {
 			ScopeAction::Repeat(n) => {
-				for i in num::range(0, n.floor() as i64) {
-					scope.clone().block.execute_all();
+				for _ in num::range(0, n.floor() as i64) {
+					for instr in block.iter() {
+						ExecuteCode(instr, scope_id, manager);
+					}
 				}
 			}
 			ScopeAction::IfBlock(c) => {
-				if c.isTruthy() {
-					scope.clone().block.execute_all();
+				if c.isTruthy(scope_id, manager) {
+					for instr in block.iter() {
+						ExecuteCode(instr, scope_id, manager);
+					}
 				}
 			}
 			_ => todo!(),
@@ -55,12 +68,26 @@ pub fn ProcessLine(line_feed: Vec<TokenData>, instr: (ParserOutput, InstructionE
 			let temp = current_scope.clone();
 			*current_scope = manager.get_parent(current_scope.clone()).unwrap();
 			println!("Ending scope and executing it: {:#?}", manager.get_scope(temp));
-			ExecuteScope(manager.get_scope(temp).unwrap());
+			ExecuteBlock(temp, manager);
 			manager.remove_scope(temp);
 		}
 	}
 
 	match manager.get_scope(current_scope.clone()).unwrap().action.clone() {
+		Some(act) if instr.0.indent => {
+			let new_scope = manager.create_scope(Some(current_scope.clone()), Some(instr.1.as_block_action()));
+			match act {
+				ScopeAction::Repeat(n) => {
+					manager.push_code_to_scope(*current_scope, &InstructionEnum::Block(new_scope));
+				}
+				ScopeAction::IfBlock(c) => {
+					manager.push_code_to_scope(*current_scope, &InstructionEnum::Block(new_scope));
+				}
+				_ => todo!(),
+			}
+
+			*current_scope = new_scope;
+		},
 		Some(act) => {
 			match act { // TODO: After all blocks have been implemented remove this match.
 				ScopeAction::Repeat(n) => {
@@ -72,19 +99,7 @@ pub fn ProcessLine(line_feed: Vec<TokenData>, instr: (ParserOutput, InstructionE
 				_ => todo!(),
 			}
 		}
-		None if instr.0.indent => {
-			//
-		}
-		None => {
-			ExecuteLine(&instr.1);
-		}
-	}
-
-	// -------------------------------------------------------------------------------------- //
-
-	match instr.0.indent {
-		// That means it creates a scope.
-		true => {
+		None if instr.0.indent => { // Top level code, but it creates a new scope
 			let newScope = match instr.1 {
 				InstructionEnum::Repeat(n) => manager.create_scope(Some(current_scope.clone()), Some(ScopeAction::Repeat(n))),
 				InstructionEnum::IfBlock(c) => manager.create_scope(Some(current_scope.clone()), Some(ScopeAction::IfBlock(c))),
@@ -92,7 +107,9 @@ pub fn ProcessLine(line_feed: Vec<TokenData>, instr: (ParserOutput, InstructionE
 			};
 			*current_scope = newScope;
 		}
-		false => {}
+		None => { // Top level code
+			ExecuteCode(&instr.1, *current_scope, manager);
+		}
 	}
 }
 
@@ -134,8 +151,11 @@ pub fn index(input: &mut Vec<String>) {
 		}
 	}
 
+	// for i in manager.get_children_tree(rootScope).iter().map(|x| manager.get_scope(*x).unwrap()).collect::<Vec<_>>() {
+	// 	println!("{i:#?}\n\n-----------------------------\n\n")
+	// }
 	if let Some(last_scope) = manager.get_children_tree(rootScope).first() {
-        ExecuteScope(manager.get_scope(*last_scope).unwrap());
+        ExecuteBlock(*last_scope, &mut manager);
     }
 	// The program doesn't know how to end the last scope if no instructions come after that last scope.
 	// So what this line does is that it executes that last scope. But I'm more than sure that this will start failing in the future.
