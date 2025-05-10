@@ -1,12 +1,13 @@
 #![allow(non_snake_case, dead_code)]
 
+use chumsky::chain::Chain;
 use chumsky::prelude::*;
 use chumsky::text::whitespace;
 use chumsky::{Parser, error::Simple};
 use colored::Colorize;
 use num::pow::Pow;
 
-use crate::features::tokenizer::TokenTable;
+use crate::features::tokenizer::{TokenData, TokenTable};
 use crate::library::Methods::Throw;
 use crate::parsers::Parsers::Expression;
 use crate::util::ScopeManager::ScopeManager;
@@ -21,39 +22,58 @@ use std::{fmt::Display, num::ParseFloatError, str::FromStr};
 /// - Text = String
 /// - Array = Vec<Object>
 
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjectComparison {
+	BothNumber(Number, Number),
+	BothText(Text, Text),
+	BothBoolean(Boolean, Boolean),
+	BothVariable(String, String),
+	NumberAndText(Number, Text),
+	NumberAndBoolean(Number, Boolean),
+	NumberAndVariable(Number, String),
+	TextAndNumber(Text, Number),
+	TextAndBoolean(Text, Boolean),
+	TextAndVariable(Text, String),
+	BooleanAndNumber(Boolean, Number),
+	BooleanAndText(Boolean, Text),
+	BooleanAndVariable(Boolean, String),
+	VariableAndNumber(String, Number),
+	VariableAndText(String, Text),
+	VariableAndBoolean(String, Boolean),
+}
+
+impl From<(&Object, &Object)> for ObjectComparison {
+	fn from(value: (&Object, &Object)) -> Self {
+		match value {
+			(Object::Number(a), Object::Number(b)) => ObjectComparison::BothNumber(a.clone(), b.clone()),
+			(Object::Text(a), Object::Text(b)) => ObjectComparison::BothText(a.clone(), b.clone()),
+			(Object::Bool(a), Object::Bool(b)) => ObjectComparison::BothBoolean(a.clone(), b.clone()),
+			(Object::Variable(a), Object::Variable(b)) => ObjectComparison::BothVariable(a.clone(), b.clone()),
+			(Object::Number(a), Object::Text(b)) => ObjectComparison::NumberAndText(a.clone(), b.clone()),
+			(Object::Number(a), Object::Bool(b)) => ObjectComparison::NumberAndBoolean(a.clone(), b.clone()),
+			(Object::Number(a), Object::Variable(b)) => ObjectComparison::NumberAndVariable(a.clone(), b.clone()),
+			(Object::Text(a), Object::Number(b)) => ObjectComparison::TextAndNumber(a.clone(), b.clone()),
+			(Object::Text(a), Object::Bool(b)) => ObjectComparison::TextAndBoolean(a.clone(), b.clone()),
+			(Object::Text(a), Object::Variable(b)) => ObjectComparison::TextAndVariable(a.clone(), b.clone()),
+			(Object::Bool(a), Object::Number(b)) => ObjectComparison::BooleanAndNumber(a.clone(), b.clone()),
+			(Object::Bool(a), Object::Text(b)) => ObjectComparison::BooleanAndText(a.clone(), b.clone()),
+			(Object::Bool(a), Object::Variable(b)) => ObjectComparison::BooleanAndVariable(a.clone(), b.clone()),
+			(Object::Variable(a), Object::Number(b)) => ObjectComparison::VariableAndNumber(a.clone(), b.clone()),
+			(Object::Variable(a), Object::Text(b)) => ObjectComparison::VariableAndText(a.clone(), b.clone()),
+			(Object::Variable(a), Object::Bool(b)) => ObjectComparison::VariableAndBoolean(a.clone(), b.clone()),
+			_ => panic!("Unsupported Object combination for comparison: ({:?}, {:?})", value.0, value.1),
+		}
+	}
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
 	Number(Number),
 	Text(Text),
 	Bool(Boolean),
 	Variable(String),
-	Expression(Expression),
-	Token(TokenTable),
 	Null,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum BaseTypes {
-	Number,
-	Text,
-	Array,
-	Bool,
-}
-
-impl BaseTypes {
-	pub const VALUES: [&str; 4] = ["yazı", "sayı", "liste", "mantıksal"];
-
-	pub const POSSIBLEBOOLEANVALUES: [[&str; 4]; 2] = [["doğru", "evet", "yes", "true"], ["yanlış", "hayır", "no", "false"]];
-
-	pub fn from_str(s: &str) -> Self {
-		match s {
-			val if val == Self::VALUES[0] => BaseTypes::Text,
-			val if val == Self::VALUES[1] => BaseTypes::Number,
-			val if val == Self::VALUES[2] => BaseTypes::Array,
-			val if val == Self::VALUES[3] => BaseTypes::Bool,
-			_ => panic!("Error while trying to convert string to BaseType: Unknown type."),
-		}
-	}
 }
 
 impl Object {
@@ -89,14 +109,6 @@ impl Object {
 		}
 	}
 
-	pub fn asExpression(self) -> Expression {
-		if let Object::Expression(val) = self {
-			val
-		} else {
-			panic!("Error while trying to convert Object to Expression: Object is not an expression expression.")
-		}
-	}
-
 	pub fn isTruthy(&self) -> bool {
 		match self {
 			Object::Bool(val) => val.value,
@@ -104,8 +116,6 @@ impl Object {
 			Object::Text(val) => !val.value.is_empty(),
 			Object::Variable(_) => true,
 			Object::Null => false,
-			Object::Expression(_) => true,
-			Object::Token(_) => true,
 		}
 	}
 }
@@ -116,17 +126,6 @@ impl Add for Object {
 	fn add(self, other: Object) -> Self::Output {
 		match (&self, &other) {
 			(Object::Number(a), Object::Number(b)) => Object::Number(Number::from(a.value + b.value)),
-			(Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
-				if let Expression::Value(val) = x.clone() {
-					if let Object::Number(val) = *val {
-						Object::from(n.value + val.value)
-					} else {
-						panic!("Error while trying to add two objects: Objects are not compatible.")
-					}
-				} else {
-					panic!("Error while trying to add two objects: Objects are not compatible.")
-				}
-			}
 			(Object::Text(a), Object::Text(b)) => Object::Text(Text::from(a.value.clone() + &b.value)),
 			_ => panic!(
 				"Error while trying to add two objects: Objects are not compatible. ({:?} and {:?})",
@@ -142,17 +141,6 @@ impl Sub for Object {
 	fn sub(self, other: Object) -> Self::Output {
 		match (&self, &other) {
 			(Object::Number(a), Object::Number(b)) => Object::Number(Number::from(a.value - b.value)),
-			(Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
-				if let Expression::Value(val) = x.clone() {
-					if let Object::Number(val) = *val {
-						Object::from(n.value - val.value)
-					} else {
-						panic!("Error while trying to subtract two objects: Objects are not compatible.")
-					}
-				} else {
-					panic!("Error while trying to subtract two objects: Objects are not compatible.")
-				}
-			}
 			_ => panic!(
 				"Error while trying to subtract two objects: Objects are not compatible. ({:?} and {:?})",
 				self, other
@@ -167,17 +155,6 @@ impl Mul for Object {
 	fn mul(self, other: Object) -> Self::Output {
 		match (&self, &other) {
 			(Object::Number(a), Object::Number(b)) => Object::Number(Number::from(a.value * b.value)),
-			(Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
-				if let Expression::Value(val) = x.clone() {
-					if let Object::Number(val) = *val {
-						Object::from(n.value * val.value)
-					} else {
-						panic!("Error while trying to multiply two objects: Objects are not compatible.")
-					}
-				} else {
-					panic!("Error while trying to multiply two objects: Objects are not compatible.")
-				}
-			}
 			(Object::Text(a), Object::Number(b)) | (Object::Number(b), Object::Text(a)) => Object::Text(Text::from(a.value.repeat(b.value as usize))),
 			_ => panic!(
 				"Error while trying to multiply two objects: Objects are not compatible. ({:?} and {:?})",
@@ -193,17 +170,6 @@ impl Div for Object {
 	fn div(self, other: Object) -> Self::Output {
 		match (&self, &other) {
 			(Object::Number(a), Object::Number(b)) => Object::Number(Number::from(a.value / b.value)),
-			(Object::Number(n), Object::Expression(x)) | (Object::Expression(x), Object::Number(n)) => {
-				if let Expression::Value(val) = x.clone() {
-					if let Object::Number(val) = *val {
-						Object::from(n.value / val.value)
-					} else {
-						panic!("Error while trying to subtract two objects: Objects are not compatible.")
-					}
-				} else {
-					panic!("Error while trying to subtract two objects: Objects are not compatible.")
-				}
-			}
 			_ => panic!(
 				"Error while trying to subtract two objects: Objects are not compatible. ({:?} and {:?})",
 				self, other
@@ -235,6 +201,78 @@ impl Pow<Object> for Object {
 		match (self, other) {
 			(Object::Number(a), Object::Number(b)) => Object::Number(Number::from(a.value.pow(b.value))),
 			_ => panic!("Error while trying to raise an object to another object's power: Objects are not compatible."),
+		}
+	}
+}
+
+impl PartialOrd for Object {
+	fn gt(&self, other: &Self) -> bool {
+		match ObjectComparison::from((self, other)) {
+			ObjectComparison::BothNumber(x, y)         => x > y,
+			ObjectComparison::BothText(x, y)           => x.value.len() > y.value.len(),
+			ObjectComparison::BothBoolean(x, y)        => x.value & !y.value,
+			ObjectComparison::BothVariable(x, y)       => x > y,
+			ObjectComparison::NumberAndText(x, y)      => x.value > y.value.len() as f64,
+			ObjectComparison::NumberAndBoolean(x, y)   => x.value > Number::from(y).value,
+			ObjectComparison::NumberAndVariable(x, y)  => x.value.to_string() > y,
+			ObjectComparison::TextAndNumber(x, y)      => x.value.len() as f64 > y.value,
+			ObjectComparison::TextAndBoolean(x, y)     => x.value.len() > (if y.value { 1 } else { 0 }),
+			ObjectComparison::TextAndVariable(x, y)    => x.value > y,
+			ObjectComparison::BooleanAndNumber(x, y)   => Number::from(x).value > y.value,
+			ObjectComparison::BooleanAndText(x, y)     => Number::from(x).value as usize > y.value.len(),
+			ObjectComparison::BooleanAndVariable(x, y) => x.value.to_string() > y,
+			ObjectComparison::VariableAndNumber(x, y)  => self > &Object::Number(y.clone()),
+			ObjectComparison::VariableAndText(x, y)    => self > &Object::Text(y.clone()),
+			ObjectComparison::VariableAndBoolean(x, y) => self > &Object::Bool(y.clone()),
+		}
+	}
+	fn lt(&self, other: &Self) -> bool {
+		match ObjectComparison::from((self, other)) {
+			ObjectComparison::BothNumber(x, y)         => x < y,
+			ObjectComparison::BothText(x, y)           => x.value.len() < y.value.len(),
+			ObjectComparison::BothBoolean(x, y)        => !x.value & y.value,
+			ObjectComparison::BothVariable(x, y)       => x < y,
+			ObjectComparison::NumberAndText(x, y)      => x.value < y.value.len() as f64,
+			ObjectComparison::NumberAndBoolean(x, y)   => x.value < Number::from(y).value,
+			ObjectComparison::NumberAndVariable(x, y)  => x.value.to_string() < y,
+			ObjectComparison::TextAndNumber(x, y)      => (x.value.len() as f64) < y.value,
+			ObjectComparison::TextAndBoolean(x, y)     => x.value.len() < (if y.value { 1 } else { 0 }),
+			ObjectComparison::TextAndVariable(x, y)    => x.value < y,
+			ObjectComparison::BooleanAndNumber(x, y)   => Number::from(x).value < y.value,
+			ObjectComparison::BooleanAndText(x, y)     => (Number::from(x).value as usize) < y.value.len(),
+			ObjectComparison::BooleanAndVariable(x, y) => x.value.to_string() < y,
+			ObjectComparison::VariableAndNumber(x, y)  => self < &Object::Number(y.clone()),
+			ObjectComparison::VariableAndText(x, y)    => self < &Object::Text(y.clone()),
+			ObjectComparison::VariableAndBoolean(x, y) => self < &Object::Bool(y.clone()),
+		}
+	}
+
+	fn ge(&self, other: &Self) -> bool {
+		!self.lt(other)
+	}
+
+	fn le(&self, other: &Self) -> bool {
+		!self.gt(other)
+	}
+
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		match ObjectComparison::from((self, other)) {
+			ObjectComparison::BothNumber(x, y) => x.partial_cmp(&y),
+			ObjectComparison::BothText(x, y) => x.value.len().partial_cmp(&y.value.len()),
+			ObjectComparison::BothBoolean(x, y) => x.value.partial_cmp(&y.value),
+			ObjectComparison::BothVariable(x, y) => x.partial_cmp(&y),
+			ObjectComparison::NumberAndText(x, y) => x.value.partial_cmp(&(y.value.len() as f64)),
+			ObjectComparison::NumberAndBoolean(x, y) => x.value.partial_cmp(&Number::from(y).value),
+			ObjectComparison::NumberAndVariable(x, y) => x.value.to_string().partial_cmp(&y),
+			ObjectComparison::TextAndNumber(x, y) => (x.value.len() as f64).partial_cmp(&y.value),
+			ObjectComparison::TextAndBoolean(x, y) => x.value.len().partial_cmp(&(if y.value { 1 } else { 0 })),
+			ObjectComparison::TextAndVariable(x, y) => x.value.partial_cmp(&y),
+			ObjectComparison::BooleanAndNumber(x, y) => Number::from(x).value.partial_cmp(&y.value),
+			ObjectComparison::BooleanAndText(x, y) => (if x.value { 1 } else { 0 }).partial_cmp(&y.value.len()),
+			ObjectComparison::BooleanAndVariable(x, y) => x.value.to_string().partial_cmp(&y),
+			ObjectComparison::VariableAndNumber(_, y) => self.partial_cmp(&Object::Number(y.clone())),
+			ObjectComparison::VariableAndText(_, y) => self.partial_cmp(&Object::Text(y.clone())),
+			ObjectComparison::VariableAndBoolean(_, y) => self.partial_cmp(&Object::Bool(y.clone())),
 		}
 	}
 }
@@ -396,6 +434,12 @@ impl Into<bool> for Boolean {
 	}
 }
 
+impl From<Boolean> for Number {
+	fn from(value: Boolean) -> Self {
+		Self { value: if value.value {1.0} else {0.0} }
+	}
+}
+
 impl FromStr for Number {
 	type Err = ParseFloatError;
 
@@ -460,8 +504,35 @@ impl Display for Object {
 			Object::Text(val) => write!(f, "{}", val),
 			Object::Variable(val) => write!(f, "{}", val),
 			Object::Null => write!(f, "NIL"),
-			Object::Expression(val) => write!(f, "{:?}", val),
-			Object::Token(val) => write!(f, "{:?}", val),
 		}
 	}
+}
+
+
+pub trait CutFromStart<T> {
+    fn cut_from_start(&self, whr: fn(&T) -> bool, amount: usize) -> Self;
+    fn count_from_start(&self, whr: fn(&T) -> bool) -> usize;
+}
+impl CutFromStart<TokenData> for Vec<TokenData> {
+    fn cut_from_start(&self, whr: fn(&TokenData) -> bool, amount: usize) -> Self {
+        let mut inner_self = self.clone();
+        let amount = usize::min(amount, inner_self.len());
+        for i in (0..amount).rev() {
+            if whr(&inner_self[i]) {
+                inner_self.remove(i);
+            }
+        }
+        inner_self
+    }
+
+    fn count_from_start(&self, whr: fn(&TokenData) -> bool) -> usize {
+        let mut count = 0;
+        for el in self.clone() {
+            if whr(&el) {
+                count += 1;
+            }
+        }
+
+        count
+    }
 }

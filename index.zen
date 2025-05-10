@@ -1,5 +1,2 @@
-500000000000000000000000000 defa tekrarla
-	yazdır "2+2-1-1-1 =", 2 + 2 - 1 - 1 - 1
-	yazdır 2 + 2
-
-yazdır ""
+10 kere tekrarla
+	yazdır 10 + 5 >> 20

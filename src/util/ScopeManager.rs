@@ -1,13 +1,13 @@
 use std::{collections::{HashMap, HashSet}, fmt::{write, Display}};
 
-use crate::{features::tokenizer::InstructionEnum, library::Types::Object};
+use crate::{features::tokenizer::InstructionEnum, library::Types::Object, parsers::Parsers::Expression};
 
 #[derive(Debug, Clone)]
 pub enum ScopeAction {
     RootScope,
     Repeat(f64),
     WhileTrue,
-    IfBlock,
+    IfBlock(Expression),
     ElifBlock,
     ElseBlock
 }
@@ -92,6 +92,17 @@ impl ScopeManager {
 
     pub fn get_children(&self, id: usize) -> Option<&HashSet<usize>> {
         Some(&self.scopes.get(&id)?.children)
+    }
+
+    pub fn get_children_tree(&self, id: usize) -> Vec<usize> {
+        let mut result = Vec::new();
+        if let Some(children) = self.get_children(id) {
+            for &child_id in children {
+                result.push(child_id);
+                result.extend(self.get_children_tree(child_id));
+            }
+        }
+        result
     }
 
     pub fn remove_scope(&mut self, id: usize) {

@@ -34,22 +34,38 @@ pub enum TokenTable {
 	#[regex(r"(?:defa|kere|kez)[ \t]+tekrarla")]
 	KeywordNDefaTekrarla,
 
-	#[regex("==|!=|<=|>=|<|>")]
-	ComparisonOperator,
-
-	#[regex(r"=|\+=|-=|\*=|/=|%=|")]
-	AssignmentOperator,
-
+	#[token("==")]
+	ComparisonOperatorEqual,
+	#[token("<<")]
+	ComparisonOperatorLessThan,
+	#[token(">>")]
+	ComparisonOperatorGreaterThan,
+	#[token("<=")]
+	ComparisonOperatorLessThanOrEqual,
+	#[token(">=")]
+	ComparisonOperatorGreaterThanOrEqual,
+	
 	#[regex(r"\+")]
-	OperatorAdd,
+	MathOperatorAdd,
 	#[regex(r"\-")]
-	OperatorSubtract,
+	MathOperatorSubtract,
 	#[regex(r"\*")]
-	OperatorMultiply,
+	MathOperatorMultiply,
 	#[regex(r"\/")]
-	OperatorDivide,
+	MathOperatorDivide,
 	#[regex(r"%")]
-	OperatorMod,
+	MathOperatorMod,
+
+	#[token(r"=")]
+	AssignmentOperatorSet,
+	#[token(r"+=")]
+	AssignmentOperatorAdd,
+	#[token(r"-=")]
+	AssignmentOperatorSubtract,
+	#[token(r"*=")]
+	AssignmentOperatorMultiply,
+	#[token(r"/=")]
+	AssignmentOperatorDivide,
 
 	#[token("(")]
 	RPAREN,
@@ -83,8 +99,10 @@ pub enum TokenTable {
 	BooleanLiteral,
 	#[regex(r#""[^"\\]*(?:\\.[^"\\]*)*""#)]
 	StringLiteral,
-	#[regex(r"-?(0|[1-9][0-9]*)(\.[0-9]+)?")]
+	#[regex(r"(0|[1-9][0-9]*)(\.[0-9]+)?")]
 	NumberLiteral,
+	#[regex(r"-(0|[1-9][0-9]*)(\.[0-9]+)?")]
+	NegativeNumberLiteral,
 
 	#[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
 	Identifier,
@@ -92,29 +110,6 @@ pub enum TokenTable {
 	#[regex(r"[ \n\r]+", logos::skip)]
 	Error,
 
-}
-
-#[derive(Debug)]
-enum Expr {
-	Num(f64),
-	Neg(Box<Expr>),
-	Add(Box<Expr>, Box<Expr>),
-	Sub(Box<Expr>, Box<Expr>),
-	Mul(Box<Expr>, Box<Expr>),
-	Div(Box<Expr>, Box<Expr>),
-}
-
-impl Expr {
-	fn eval(&self) -> f64 {
-		match self {
-			Expr::Num(n) => *n,
-			Expr::Neg(rhs) => -rhs.eval(),
-			Expr::Add(lhs, rhs) => lhs.eval() + rhs.eval(),
-			Expr::Sub(lhs, rhs) => lhs.eval() - rhs.eval(),
-			Expr::Mul(lhs, rhs) => lhs.eval() * rhs.eval(),
-			Expr::Div(lhs, rhs) => lhs.eval() / rhs.eval(),
-		}
-	}
 }
 
 impl Display for TokenTable {
@@ -130,13 +125,11 @@ impl Display for TokenTable {
 			TokenTable::KeywordYazdır => write!(f, "KeywordYazdır"),
 			TokenTable::KeywordSürekliTekrarla => write!(f, "KeywordSürekliTekrarla"),
 			TokenTable::KeywordNDefaTekrarla => write!(f, "KeywordNDefaTekrarla"),
-			TokenTable::ComparisonOperator => write!(f, "ComparisonOperator"),
-			TokenTable::AssignmentOperator => write!(f, "AssignmentOperator"),
-			TokenTable::OperatorAdd => write!(f, "OperatorAdd"),
-			TokenTable::OperatorSubtract => write!(f, "OperatorSubtract"),
-			TokenTable::OperatorMultiply => write!(f, "OperatorMultiply"),
-			TokenTable::OperatorDivide => write!(f, "OperatorDivide"),
-			TokenTable::OperatorMod => write!(f, "OperatorMod"),
+			TokenTable::MathOperatorAdd => write!(f, "OperatorAdd"),
+			TokenTable::MathOperatorSubtract => write!(f, "OperatorSubtract"),
+			TokenTable::MathOperatorMultiply => write!(f, "OperatorMultiply"),
+			TokenTable::MathOperatorDivide => write!(f, "OperatorDivide"),
+			TokenTable::MathOperatorMod => write!(f, "OperatorMod"),
 			TokenTable::RPAREN => write!(f, "RPAREN"),
 			TokenTable::LPAREN => write!(f, "LPAREN"),
 			TokenTable::EmptyParens => write!(f, "EmptyParens"),
@@ -152,7 +145,18 @@ impl Display for TokenTable {
 			TokenTable::BooleanLiteral => write!(f, "BooleanLiteral"),
 			TokenTable::StringLiteral => write!(f, "StringLiteral"),
 			TokenTable::NumberLiteral => write!(f, "NumberLiteral"),
+			TokenTable::NegativeNumberLiteral => write!(f, "NegativeNumberLiteral"),
 			TokenTable::Identifier => write!(f, "Identifier"),
+			TokenTable::ComparisonOperatorEqual => write!(f, "ComparisonOperatorEqual"),
+			TokenTable::ComparisonOperatorLessThan => write!(f, "ComparisonOperatorLessThan"),
+			TokenTable::ComparisonOperatorGreaterThan => write!(f, "ComparisonOperatorGreaterThan"),
+			TokenTable::ComparisonOperatorLessThanOrEqual => write!(f, "ComparisonOperatorLessThanOrEqual"),
+			TokenTable::ComparisonOperatorGreaterThanOrEqual => write!(f, "ComparisonOperatorGreaterThanOrEqual"),
+			TokenTable::AssignmentOperatorSet => write!(f, "AssignmentOperatorSet"),
+			TokenTable::AssignmentOperatorAdd => write!(f, "AssignmentOperatorAdd"),
+			TokenTable::AssignmentOperatorSubtract => write!(f, "AssignmentOperatorSubtract"),
+			TokenTable::AssignmentOperatorMultiply => write!(f, "AssignmentOperatorMultiply"),
+			TokenTable::AssignmentOperatorDivide => write!(f, "AssignmentOperatorDivide"),
 			TokenTable::Error => write!(f, "Error"),
 		}
 	}
@@ -187,11 +191,16 @@ impl TokenData {
 
 	pub fn toOp(&self) -> fn(Box<Expression>, Box<Expression>) -> Expression {
 		match self.token {
-			TokenTable::OperatorAdd => Expression::Add,
-			TokenTable::OperatorSubtract => Expression::Sub,
-			TokenTable::OperatorMultiply => Expression::Mul,
-			TokenTable::OperatorDivide => Expression::Div,
-			TokenTable::OperatorMod => Expression::Mod,
+			TokenTable::MathOperatorAdd => Expression::Add,
+			TokenTable::MathOperatorSubtract => Expression::Sub,
+			TokenTable::MathOperatorMultiply => Expression::Mul,
+			TokenTable::MathOperatorDivide => Expression::Div,
+			TokenTable::MathOperatorMod => Expression::Mod,
+			TokenTable::ComparisonOperatorEqual => Expression::Equal,
+			TokenTable::ComparisonOperatorGreaterThan => Expression::GreaterThan,
+			TokenTable::ComparisonOperatorGreaterThanOrEqual => Expression::GreaterThanOrEqual,
+			TokenTable::ComparisonOperatorLessThan => Expression::LessThan,
+			TokenTable::ComparisonOperatorLessThanOrEqual => Expression::LessThanOrEqual,
 			_ => panic!()
 		}
 
@@ -200,7 +209,7 @@ impl TokenData {
 
 	pub fn asNumberLiteral(&self) -> f64 {
 		match self.token {
-			TokenTable::NumberLiteral => self.slice.parse::<f64>().unwrap_or(0.0), // TODO: Replace all unwrap_or statements with proper errors.
+			TokenTable::NumberLiteral | TokenTable::NegativeNumberLiteral => self.slice.parse::<f64>().unwrap_or(0.0), // TODO: Replace all unwrap_or statements with proper errors.
 			_ => 0.0,
 		}
 	}
@@ -226,6 +235,7 @@ impl TokenData {
 		match self.token {
 			TokenTable::StringLiteral => Object::from(self.asStringLiteral()),
 			TokenTable::NumberLiteral => Object::from(self.asNumberLiteral()),
+			TokenTable::NegativeNumberLiteral => Object::from(self.asNumberLiteral()),
 			TokenTable::BooleanLiteral => Object::from(self.asBooleanLiteral()),
 			_ => panic!("Unsupported token type for conversion to Object."),
 		}
@@ -305,5 +315,6 @@ pub fn tokenize(input: &str) -> Vec<TokenData> {
 			span: lexer.span(),
 		});
 	}
+	println!("Tokenizer: {tokens:#?}");
 	tokens
 }
