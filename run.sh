@@ -1,1 +1,6 @@
-cargo -q run -- run index.zen
+if cargo build; then
+	clear;
+	./target/debug/ZenBackend "$@";
+else
+	echo "Build Failed.";
+fi

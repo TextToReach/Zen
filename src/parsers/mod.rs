@@ -3,10 +3,11 @@
 pub mod DefineVariable;
 pub mod Print;
 pub mod Repeat;
+pub mod If;
 
 pub mod Parsers {
 	use std::fmt::Display;
-use std::rc::Rc;
+	use std::rc::Rc;
 
 	use crate::features::tokenizer::InstructionEnum;
 	use crate::features::tokenizer::TokenData;
@@ -17,6 +18,7 @@ use std::rc::Rc;
 
 	use super::Print;
 	use super::Repeat;
+	use super::If;
 
 	type ParserType1 = Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>>;
 	type ParserType2 = Box<dyn Parser<TokenData, (ParserOutput, InstructionEnum), Error = Simple<TokenData>>>;
@@ -42,7 +44,8 @@ use std::rc::Rc;
 		Box::new(recursive(|instr_parser| {
 			choice([
                 WithIndentation(Repeat::parser()),
-                WithoutIndentation(Print::parser())
+                WithIndentation(If::parser()),
+				WithoutIndentation(Print::parser()),
             ])
 		}))
 	}
@@ -114,6 +117,9 @@ use std::rc::Rc;
 					(left != right).into()
 				}
 			}
+		}
+		pub fn isTruthy(&self) -> bool {
+			self.evaluate().isTruthy()
 		}
 	}
 

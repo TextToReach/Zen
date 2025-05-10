@@ -1,2 +1,4 @@
-10 kere tekrarla
-	yazdır 10 + 5 >> 20
+eğer 5 << 10 ise
+	yazdır "yey"
+	yazdır "yey"
+	yazdır "yey"

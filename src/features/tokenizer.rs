@@ -5,7 +5,7 @@ use std::{
 	ops::Range,
 };
 
-use crate::{library::Types::Object, parsers::Parsers::Expression};
+use crate::{library::Types::Object, parsers::Parsers::Expression, util::process::ExecuteLine};
 use logos::Logos;
 
 #[derive(Clone, Logos, Debug, PartialEq, PartialOrd, Hash, Eq)]
@@ -110,6 +110,12 @@ pub enum TokenTable {
 	#[regex(r"[ \n\r]+", logos::skip)]
 	Error,
 
+}
+
+impl TokenTable {
+	pub fn asTokenData(&self) -> TokenData {
+		TokenData::default(self.clone())
+	}
 }
 
 impl Display for TokenTable {
@@ -295,12 +301,21 @@ pub enum InstructionEnum {
 	Input(Vec<TokenData>),
 	Repeat(f64),
 	WhileTrue(Vec<TokenData>),
-	IfBlock(Vec<TokenData>),
-	ElifBlock(Vec<TokenData>),
-	ElseBlock(Vec<TokenData>),
+	IfBlock(Expression),
+	ElifBlock(Expression),
+	ElseBlock(Expression),
 	VariableDeclaration(Vec<TokenData>),
 	Break(Vec<TokenData>),
 	Continue(Vec<TokenData>),
+}
+
+pub trait ExecuteAll { fn execute_all(&self); }
+impl ExecuteAll for Vec<InstructionEnum> {
+	fn execute_all(&self) {
+		for instr in self {
+			ExecuteLine(instr);
+		}
+	}
 }
 
 pub fn tokenize(input: &str) -> Vec<TokenData> {
@@ -315,6 +330,6 @@ pub fn tokenize(input: &str) -> Vec<TokenData> {
 			span: lexer.span(),
 		});
 	}
-	println!("Tokenizer: {tokens:#?}");
+	// println!("Tokenizer: {tokens:#?}");
 	tokens
 }

@@ -1,5 +1,5 @@
 use super::{ScopeManager::Scope, Util::generate_8_digit_id};
-use crate::features::tokenizer::RemoveQuotes;
+use crate::features::tokenizer::{ExecuteAll, RemoveQuotes};
 use crate::{
 	DebugVec, Print, PrintVec,
 	features::tokenizer::{InstructionEnum, TokenData, TokenTable, tokenize},
@@ -31,13 +31,13 @@ pub fn ExecuteScope(scope: &Scope) {
 		Some(act) => match act {
 			ScopeAction::Repeat(n) => {
 				for i in num::range(0, n.floor() as i64) {
-					for instr in scope.clone().block {
-						ExecuteLine(&instr);
-					}
+					scope.clone().block.execute_all();
 				}
 			}
-			ScopeAction::IfBlock(n) => {
-				
+			ScopeAction::IfBlock(c) => {
+				if c.isTruthy() {
+					scope.clone().block.execute_all();
+				}
 			}
 			_ => todo!(),
 		},
@@ -62,10 +62,11 @@ pub fn ProcessLine(line_feed: Vec<TokenData>, instr: (ParserOutput, InstructionE
 
 	match manager.get_scope(current_scope.clone()).unwrap().action.clone() {
 		Some(act) => {
-			// The instructions inside this scope will be handled by that scope's executer.
-			// println!("{} {}.", "Parent scope has action:".red(), act);
-			match act {
+			match act { // TODO: After all blocks have been implemented remove this match.
 				ScopeAction::Repeat(n) => {
+					manager.push_code_to_scope(current_scope.clone(), &instr.1);
+				}
+				ScopeAction::IfBlock(c) => {
 					manager.push_code_to_scope(current_scope.clone(), &instr.1);
 				}
 				_ => todo!(),
@@ -86,6 +87,7 @@ pub fn ProcessLine(line_feed: Vec<TokenData>, instr: (ParserOutput, InstructionE
 		true => {
 			let newScope = match instr.1 {
 				InstructionEnum::Repeat(n) => manager.create_scope(Some(current_scope.clone()), Some(ScopeAction::Repeat(n))),
+				InstructionEnum::IfBlock(c) => manager.create_scope(Some(current_scope.clone()), Some(ScopeAction::IfBlock(c))),
 				_ => todo!("Implement other actions (ifs, whiles etc.)"),
 			};
 			*current_scope = newScope;
