@@ -1,5 +1,5 @@
 use super::{ScopeManager::Scope, Util::generate_8_digit_id};
-use crate::features::tokenizer::RemoveQuotes;
+use crate::features::tokenizer::{AssignmentMethod, RemoveQuotes};
 use crate::{
 	DebugVec, Print, PrintVec,
 	features::tokenizer::{InstructionEnum, TokenData, TokenTable, tokenize},
@@ -22,7 +22,15 @@ pub fn ExecuteCode(line: &InstructionEnum, scope_id: usize, manager: &mut ScopeM
 		}
 		InstructionEnum::VariableDeclaration(name, value, method) => {
 			let evaluated_value = value.evaluate(scope_id, manager);
-			manager.define_var(scope_id, name, evaluated_value);
+			let previous_value = manager.get_var(scope_id, name.clone());
+			match method {
+				AssignmentMethod::Set => manager.define_var(scope_id, name, evaluated_value),
+				AssignmentMethod::Add => manager.define_var(scope_id, name, previous_value.unwrap() + evaluated_value),
+				AssignmentMethod::Sub => manager.define_var(scope_id, name, previous_value.unwrap() - evaluated_value),
+				AssignmentMethod::Mul => manager.define_var(scope_id, name, previous_value.unwrap() * evaluated_value),
+				AssignmentMethod::Div => manager.define_var(scope_id, name, previous_value.unwrap() / evaluated_value),
+			}
+			
 		}
 		_ => todo!(),
 	}	

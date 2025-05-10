@@ -1,2 +1,5 @@
 a = 10
-yazdır a + 5
+yazdır a
+
+a -= 10
+yazdır a
