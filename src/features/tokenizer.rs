@@ -5,7 +5,7 @@ use std::{
 	ops::{Not, Range},
 };
 
-use crate::{library::Types::Object, parsers::Parsers::Expression, util::{process::ExecuteCode, ScopeManager::ScopeAction}};
+use crate::{library::Types::Object, parsers::Parsers::Expression, util::ScopeManager::ScopeAction};
 use logos::Logos;
 
 #[derive(Clone, Logos, Debug, PartialEq, PartialOrd, Hash, Eq)]
@@ -39,6 +39,8 @@ pub enum TokenTable {
 
 	#[token("==")]
 	ComparisonOperatorEqual,
+	#[token("!=")]
+	ComparisonOperatorNotEqual,
 	#[token("<<")]
 	ComparisonOperatorLessThan,
 	#[token(">>")]
@@ -158,6 +160,7 @@ impl Display for TokenTable {
 			TokenTable::NegativeNumberLiteral => write!(f, "NegativeNumberLiteral"),
 			TokenTable::Identifier => write!(f, "Identifier"),
 			TokenTable::ComparisonOperatorEqual => write!(f, "ComparisonOperatorEqual"),
+			TokenTable::ComparisonOperatorNotEqual => write!(f, "ComparisonOperatorNotEqual"),
 			TokenTable::ComparisonOperatorLessThan => write!(f, "ComparisonOperatorLessThan"),
 			TokenTable::ComparisonOperatorGreaterThan => write!(f, "ComparisonOperatorGreaterThan"),
 			TokenTable::ComparisonOperatorLessThanOrEqual => write!(f, "ComparisonOperatorLessThanOrEqual"),
@@ -207,6 +210,7 @@ impl TokenData {
 			TokenTable::MathOperatorDivide => Expression::Div,
 			TokenTable::MathOperatorMod => Expression::Mod,
 			TokenTable::ComparisonOperatorEqual => Expression::Equal,
+			TokenTable::ComparisonOperatorNotEqual => Expression::NotEqual,
 			TokenTable::ComparisonOperatorGreaterThan => Expression::GreaterThan,
 			TokenTable::ComparisonOperatorGreaterThanOrEqual => Expression::GreaterThanOrEqual,
 			TokenTable::ComparisonOperatorLessThan => Expression::LessThan,
@@ -318,17 +322,16 @@ pub enum InstructionEnum {
 	Input(Vec<TokenData>),
 	
 	// BLOCKS
-	Repeat 		{ blocks: Vec<InstructionEnum>, repeat_count: f64 },
-	WhileTrue 	{ blocks: Vec<InstructionEnum> },
-	IfBlock 	{ blocks: Vec<InstructionEnum>, condition: Expression },
-	ElifBlock 	{ blocks: Vec<InstructionEnum>, condition: Expression },
-	ElseBlock 	{ blocks: Vec<InstructionEnum> },
+	Repeat 		{ scope_pointer: usize, repeat_count: f64 },
+	WhileTrue 	{ scope_pointer: usize },
+	IfBlock 	{ scope_pointer: usize, condition: Expression },
+	ElifBlock 	{ scope_pointer: usize, condition: Expression },
+	ElseBlock 	{ scope_pointer: usize },
 	// BLOCKS
 
 	VariableDeclaration(String, Expression, AssignmentMethod),
 	Break(Vec<TokenData>),
-	Continue(Vec<TokenData>),
-	Block(usize)
+	Continue(Vec<TokenData>)
 }
 
 impl InstructionEnum {
@@ -344,11 +347,24 @@ impl InstructionEnum {
 	}
 	pub fn as_block_action(&self) -> ScopeAction {
 		match self {
-			InstructionEnum::IfBlock { condition, blocks } => ScopeAction::IfBlock{ condition: condition.clone() },
-			InstructionEnum::ElifBlock { condition, blocks } => ScopeAction::ElifBlock{ condition: condition.clone() },
+			InstructionEnum::IfBlock { condition, scope_pointer } => ScopeAction::IfBlock{ condition: condition.clone() },
+			InstructionEnum::ElifBlock { condition, scope_pointer } => ScopeAction::ElifBlock{ condition: condition.clone() },
 			InstructionEnum::ElseBlock { .. } => ScopeAction::ElseBlock,
 			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
-			InstructionEnum::Repeat { repeat_count, blocks } => ScopeAction::Repeat(*repeat_count),
+			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(*repeat_count),
+			_ => panic!()
+		}
+	}
+	
+	pub fn set_block_pointer(&mut self, pointer: usize) {
+		match self {
+			InstructionEnum::IfBlock { scope_pointer, .. } |
+			InstructionEnum::ElifBlock { scope_pointer, .. } |
+			InstructionEnum::ElseBlock { scope_pointer } |
+			InstructionEnum::WhileTrue { scope_pointer } |
+			InstructionEnum::Repeat { scope_pointer, .. } => {
+				*scope_pointer = pointer
+			}
 			_ => panic!()
 		}
 	}

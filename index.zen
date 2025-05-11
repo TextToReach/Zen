@@ -1,5 +1,8 @@
 yazdır 1
 yazdır 2
 yazdır 3
+i = 0
 10 kere tekrarla
-	yazdır "mrb"
+	i += 1
+	eğer i % 2 != 0 ise
+		yazdır "i bir tek sayı:", i

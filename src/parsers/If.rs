@@ -10,7 +10,7 @@ pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<Tok
 	let out = just(TokenTable::KeywordEğer.asTokenData())
 		.ignore_then(Parsers::expression())
 		.then_ignore(just(TokenTable::Keywordİse.asTokenData()))
-		.map(|x| InstructionEnum::IfBlock { condition: x, blocks: vec![] });
+		.map(|x| InstructionEnum::IfBlock { condition: x, scope_pointer: 0 });
 
 	return Box::new(out);
 }

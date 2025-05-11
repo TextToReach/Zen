@@ -185,6 +185,7 @@ pub mod Parsers {
 
 			let comparison_operator = choice([
 				just(TokenTable::ComparisonOperatorEqual.asTokenData()),
+				just(TokenTable::ComparisonOperatorNotEqual.asTokenData()),
 				just(TokenTable::ComparisonOperatorGreaterThan.asTokenData()),
 				just(TokenTable::ComparisonOperatorGreaterThanOrEqual.asTokenData()),
 				just(TokenTable::ComparisonOperatorLessThan.asTokenData()),
