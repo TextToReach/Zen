@@ -7,9 +7,9 @@ pub enum ScopeAction {
     RootScope,
     Repeat(f64),
     WhileTrue,
-    IfBlock(Expression),
-    ElifBlock(Expression),
-    ElseBlock(Expression)
+    IfBlock { condition: Expression },
+    ElifBlock { condition: Expression },
+    ElseBlock
 }
 
 impl Display for ScopeAction {

@@ -1,25 +1,29 @@
 #![allow(dead_code)]
 
-pub mod DefineVariable;
+pub mod Define;
+pub mod Elif;
+pub mod Else;
+pub mod If;
 pub mod Print;
 pub mod Repeat;
-pub mod If;
 
 pub mod Parsers {
-	use std::fmt::Display;
-	use std::rc::Rc;
+	use super::Define;
+	use super::If;
+	use super::Elif;
+	use super::Else;
+	use super::Print;
+	use super::Repeat;
 	use crate::features::tokenizer::AssignmentMethod;
 	use crate::features::tokenizer::InstructionEnum;
 	use crate::features::tokenizer::TokenData;
 	use crate::features::tokenizer::TokenTable;
 	use crate::library::Types::Object;
-use crate::util::ScopeManager::ScopeManager;
+	use crate::util::ScopeManager::ScopeManager;
 	use chumsky::prelude::*;
 	use num::pow::Pow;
-	use super::DefineVariable;
-	use super::Print;
-	use super::Repeat;
-	use super::If;
+	use std::fmt::Display;
+	use std::rc::Rc;
 
 	type ParserType1 = Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>>;
 	type ParserType2 = Box<dyn Parser<TokenData, (ParserOutput, InstructionEnum), Error = Simple<TokenData>>>;
@@ -44,11 +48,13 @@ use crate::util::ScopeManager::ScopeManager;
 	pub fn parser() -> Box<dyn Parser<TokenData, (ParserOutput, InstructionEnum), Error = Simple<TokenData>>> {
 		Box::new(recursive(|instr_parser| {
 			choice([
-                WithIndentation(Repeat::parser()),
-                WithIndentation(If::parser()),
+				WithIndentation(Repeat::parser()),
+				WithIndentation(If::parser()),
+				WithIndentation(Elif::parser()),
+				WithIndentation(Else::parser()),
 				WithoutIndentation(Print::parser()),
-				WithoutIndentation(DefineVariable::parser()),
-            ])
+				WithoutIndentation(Define::parser()),
+			])
 		}))
 	}
 
@@ -79,7 +85,7 @@ use crate::util::ScopeManager::ScopeManager;
 					} else {
 						*val.clone()
 					}
-				},
+				}
 				Expression::Add(lhs, rhs) => {
 					let left = lhs.evaluate(currentScope, manager);
 					let right = rhs.evaluate(currentScope, manager);
@@ -164,19 +170,18 @@ use crate::util::ScopeManager::ScopeManager;
 		)
 	}
 
-    // FIXME: Fix parantheses support.
-    pub fn expression() -> impl Parser<TokenData, Expression, Error = Simple<TokenData>> {
-        let (paren_left, paren_right) = parens();
+	// FIXME: Fix parantheses support.
+	pub fn expression() -> impl Parser<TokenData, Expression, Error = Simple<TokenData>> {
+		let (paren_left, paren_right) = parens();
 
-        let expr = recursive(|expr| {
-            let atom = Rc::new(object().or(expr.delimited_by(paren_left, paren_right)));
-            
-            let mul_operator = just(TokenTable::MathOperatorMultiply.asTokenData())
-                .or(just(TokenTable::MathOperatorDivide.asTokenData()))
-                .or(just(TokenTable::MathOperatorMod.asTokenData()));
+		let expr = recursive(|expr| {
+			let atom = Rc::new(object().or(expr.delimited_by(paren_left, paren_right)));
 
-            let add_operator = just(TokenTable::MathOperatorAdd.asTokenData())
-                .or(just(TokenTable::MathOperatorSubtract.asTokenData()));
+			let mul_operator = just(TokenTable::MathOperatorMultiply.asTokenData())
+				.or(just(TokenTable::MathOperatorDivide.asTokenData()))
+				.or(just(TokenTable::MathOperatorMod.asTokenData()));
+
+			let add_operator = just(TokenTable::MathOperatorAdd.asTokenData()).or(just(TokenTable::MathOperatorSubtract.asTokenData()));
 
 			let comparison_operator = choice([
 				just(TokenTable::ComparisonOperatorEqual.asTokenData()),
@@ -186,41 +191,45 @@ use crate::util::ScopeManager::ScopeManager;
 				just(TokenTable::ComparisonOperatorLessThanOrEqual.asTokenData()),
 			]);
 
-            let mul = atom
-                .clone()
-                .then(mul_operator.clone().then(atom).repeated())
-                .foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
+			let mul = atom
+				.clone()
+				.then(mul_operator.clone().then(atom).repeated())
+				.foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
 
-            let add = mul
-                .clone()
-                .then(add_operator.clone().then(mul).repeated())
-                .foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
+			let add = mul
+				.clone()
+				.then(add_operator.clone().then(mul).repeated())
+				.foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
 
-			let comparison = add.clone()
+			let comparison = add
+				.clone()
 				.then(comparison_operator.then(add).repeated())
 				.foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
 
-            comparison
-        });
+			comparison
+		});
 
-        expr
-    }
+		expr
+	}
 
 	pub fn parens() -> (
 		Rc<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>>,
 		Rc<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>>,
-	) {(
-		Rc::new(filter(|x: &TokenData| x.token == TokenTable::LPAREN)),
-		Rc::new(filter(|x: &TokenData| x.token == TokenTable::RPAREN)),
-	)}
+	) {
+		(
+			Rc::new(filter(|x: &TokenData| x.token == TokenTable::LPAREN)),
+			Rc::new(filter(|x: &TokenData| x.token == TokenTable::RPAREN)),
+		)
+	}
 
 	pub fn assignment_operator() -> Box<dyn Parser<TokenData, AssignmentMethod, Error = Simple<TokenData>>> {
 		Box::new(
-			just(TokenTable::AssignmentOperatorSet.asTokenData()).to(AssignmentMethod::Set)
-			.or(just(TokenTable::AssignmentOperatorAdd.asTokenData()).to(AssignmentMethod::Add))
-			.or(just(TokenTable::AssignmentOperatorSubtract.asTokenData()).to(AssignmentMethod::Sub))
-			.or(just(TokenTable::AssignmentOperatorMultiply.asTokenData()).to(AssignmentMethod::Mul))
-			.or(just(TokenTable::AssignmentOperatorDivide.asTokenData()).to(AssignmentMethod::Div))
+			just(TokenTable::AssignmentOperatorSet.asTokenData())
+				.to(AssignmentMethod::Set)
+				.or(just(TokenTable::AssignmentOperatorAdd.asTokenData()).to(AssignmentMethod::Add))
+				.or(just(TokenTable::AssignmentOperatorSubtract.asTokenData()).to(AssignmentMethod::Sub))
+				.or(just(TokenTable::AssignmentOperatorMultiply.asTokenData()).to(AssignmentMethod::Mul))
+				.or(just(TokenTable::AssignmentOperatorDivide.asTokenData()).to(AssignmentMethod::Div)),
 		)
 	}
 

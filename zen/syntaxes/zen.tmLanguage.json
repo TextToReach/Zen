@@ -1,0 +1,24 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "bozkurt",
+	"scopeName": "source.bozkurt",
+	"fileTypes": ["bzk"],
+	"patterns": [
+		{
+			"name": "string.quoted.double.bozkurt",
+			"match": "\"([^\"\\\\]|\\\\.)*\""
+		},
+		{
+			"name": "constant.numeric.bozkurt",
+			"match": "\\b\\d+(\\.\\d+)?\\b"
+		},
+		{
+			"name": "keyword.control.bozkurt",
+			"match": "\\b(Eğer|İse|Değilse|Ve|Veya|Yazdır|Sürekli|Tekrarla|Defa)\\b"
+		},
+		{
+			"name": "keyword.operator.bozkurt",
+			"match": "(\\+|\\-|\\*|\\/|=|==|!=|<=|>=|<|>)"
+		}
+	]
+}

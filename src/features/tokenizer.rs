@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use std::{
-	fmt::{Debug, Display},
-	ops::Range,
+	fmt::{write, Debug, Display},
+	ops::{Not, Range},
 };
 
 use crate::{library::Types::Object, parsers::Parsers::Expression, util::{process::ExecuteCode, ScopeManager::ScopeAction}};
@@ -13,9 +13,12 @@ pub enum TokenTable {
 	#[regex(r"\t")]
 	Tab,
 
+	#[token(r"//")]
+	Comment,
+
 	#[token("eğer")]
 	KeywordEğer,
-	#[token("ise")]
+	#[token(r"ise")]
 	Keywordİse,
 	#[regex(r"değilse[ \t]+ve")]
 	KeywordDeğilseVe,
@@ -122,6 +125,7 @@ impl Display for TokenTable {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			TokenTable::Tab => write!(f, "\t"),
+			TokenTable::Comment => write!(f, "Comment"),
 			TokenTable::KeywordEğer => write!(f, "KeywordEğer"),
 			TokenTable::Keywordİse => write!(f, "Keywordİse"),
 			TokenTable::KeywordDeğilseVe => write!(f, "KeywordDeğilseVe"),
@@ -252,6 +256,15 @@ impl TokenData {
 pub trait RemoveQuotes {
 	fn remove_quotes(&self) -> String;
 }
+pub trait CheckTokenVec {
+	fn is_all_ok(&self) -> bool;
+}
+
+impl CheckTokenVec for Vec<TokenData> {
+	fn is_all_ok(&self) -> bool {
+		self.is_empty().not() || self.iter().all(|x| x.isOk)
+	}
+}
 
 impl RemoveQuotes for String {
 	fn remove_quotes(&self) -> String {
@@ -296,24 +309,22 @@ impl PartialEq for TokenData {
 impl Eq for TokenData {}
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AssignmentMethod {
-	Set,
-	Add,
-	Sub,
-	Mul,
-	Div
-}
+pub enum AssignmentMethod { Set, Add, Sub, Mul, Div }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
 	NoOp,
 	Print(Vec<Expression>),
 	Input(Vec<TokenData>),
-	Repeat(f64),
-	WhileTrue,
-	IfBlock(Expression),
-	ElifBlock(Expression),
-	ElseBlock(Expression),
+	
+	// BLOCKS
+	Repeat 		{ blocks: Vec<InstructionEnum>, repeat_count: f64 },
+	WhileTrue 	{ blocks: Vec<InstructionEnum> },
+	IfBlock 	{ blocks: Vec<InstructionEnum>, condition: Expression },
+	ElifBlock 	{ blocks: Vec<InstructionEnum>, condition: Expression },
+	ElseBlock 	{ blocks: Vec<InstructionEnum> },
+	// BLOCKS
+
 	VariableDeclaration(String, Expression, AssignmentMethod),
 	Break(Vec<TokenData>),
 	Continue(Vec<TokenData>),
@@ -324,20 +335,20 @@ impl InstructionEnum {
 	pub fn is_block(&self) -> bool {
 		matches!(
 			self,
-			InstructionEnum::IfBlock(_) |
-			InstructionEnum::ElifBlock(_) |
-			InstructionEnum::ElseBlock(_) |
-			InstructionEnum::WhileTrue |
-			InstructionEnum::Repeat(_)
+			InstructionEnum::IfBlock { .. } |
+			InstructionEnum::ElifBlock { .. } |
+			InstructionEnum::ElseBlock { .. } |
+			InstructionEnum::WhileTrue { .. } |
+			InstructionEnum::Repeat { .. }
 		)
 	}
 	pub fn as_block_action(&self) -> ScopeAction {
 		match self {
-			InstructionEnum::IfBlock(x) => ScopeAction::IfBlock(x.clone()),
-			InstructionEnum::ElifBlock(x) => ScopeAction::ElifBlock(x.clone()),
-			InstructionEnum::ElseBlock(x) => ScopeAction::ElseBlock(x.clone()),
-			InstructionEnum::WhileTrue => ScopeAction::WhileTrue,
-			InstructionEnum::Repeat(x) => ScopeAction::Repeat(*x),
+			InstructionEnum::IfBlock { condition, blocks } => ScopeAction::IfBlock{ condition: condition.clone() },
+			InstructionEnum::ElifBlock { condition, blocks } => ScopeAction::ElifBlock{ condition: condition.clone() },
+			InstructionEnum::ElseBlock { .. } => ScopeAction::ElseBlock,
+			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
+			InstructionEnum::Repeat { repeat_count, blocks } => ScopeAction::Repeat(*repeat_count),
 			_ => panic!()
 		}
 	}
@@ -351,7 +362,10 @@ pub fn tokenize(input: &str) -> Vec<TokenData> {
 		tokens.push(TokenData {
 			isOk: token.is_ok(),
 			token: token.clone().unwrap_or(TokenTable::Error),
-			slice: lexer.slice().to_string(),
+			slice: match token {
+				Ok(TokenTable::StringLiteral) => lexer.slice().to_string().remove_quotes(),
+				_ => lexer.slice().to_string(),
+			},
 			span: lexer.span(),
 		});
 	}
