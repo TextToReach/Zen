@@ -36,6 +36,10 @@ pub enum TokenTable {
 	KeywordSürekliTekrarla,
 	#[regex(r"(?:defa|kere|kez)[ \t]+tekrarla")]
 	KeywordNDefaTekrarla,
+	#[regex(r"devam[ \t]+et")]
+	KeywordDevamEt,
+	#[regex(r"durdur")]
+	KeywordDurdur,
 
 	#[token("==")]
 	ComparisonOperatorEqual,
@@ -137,6 +141,8 @@ impl Display for TokenTable {
 			TokenTable::KeywordYazdır => write!(f, "KeywordYazdır"),
 			TokenTable::KeywordSürekliTekrarla => write!(f, "KeywordSürekliTekrarla"),
 			TokenTable::KeywordNDefaTekrarla => write!(f, "KeywordNDefaTekrarla"),
+			TokenTable::KeywordDurdur => write!(f, "KeywordDurdur"),
+			TokenTable::KeywordDevamEt => write!(f, "KeywordDevamEt"),
 			TokenTable::MathOperatorAdd => write!(f, "OperatorAdd"),
 			TokenTable::MathOperatorSubtract => write!(f, "OperatorSubtract"),
 			TokenTable::MathOperatorMultiply => write!(f, "OperatorMultiply"),
@@ -266,7 +272,7 @@ pub trait CheckTokenVec {
 
 impl CheckTokenVec for Vec<TokenData> {
 	fn is_all_ok(&self) -> bool {
-		self.is_empty().not() || self.iter().all(|x| x.isOk)
+		(!self.is_empty()) && self.iter().all(|x| x.isOk)
 	}
 }
 
@@ -330,8 +336,8 @@ pub enum InstructionEnum {
 	// BLOCKS
 
 	VariableDeclaration(String, Expression, AssignmentMethod),
-	Break(Vec<TokenData>),
-	Continue(Vec<TokenData>)
+	Break,
+	Continue
 }
 
 impl InstructionEnum {

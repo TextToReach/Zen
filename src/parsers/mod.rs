@@ -6,14 +6,20 @@ pub mod Else;
 pub mod If;
 pub mod Print;
 pub mod Repeat;
+pub mod Break;
+pub mod Continue;
+pub mod WhileTrue;
 
 pub mod Parsers {
+	use super::Break;
+	use super::Continue;
 	use super::Define;
 	use super::If;
 	use super::Elif;
 	use super::Else;
 	use super::Print;
 	use super::Repeat;
+use super::WhileTrue;
 	use crate::features::tokenizer::AssignmentMethod;
 	use crate::features::tokenizer::InstructionEnum;
 	use crate::features::tokenizer::TokenData;
@@ -52,8 +58,11 @@ pub mod Parsers {
 				WithIndentation(If::parser()),
 				WithIndentation(Elif::parser()),
 				WithIndentation(Else::parser()),
+				WithIndentation(WhileTrue::parser()),
 				WithoutIndentation(Print::parser()),
 				WithoutIndentation(Define::parser()),
+				WithoutIndentation(Break::parser()),
+				WithoutIndentation(Continue::parser()),
 			])
 		}))
 	}

@@ -1,6 +1,3 @@
-yazdır 1
-yazdır 2
-yazdır 3
 i = 0
 10 kere tekrarla
 	i += 1
