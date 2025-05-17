@@ -64,7 +64,7 @@ pub enum BlockOutput {
 
 pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, last_conditional_block: &mut ConditionalBlockType) -> BlockOutput {
 	// println!("Ran {scope_id}.");
-	let scope = manager.get_scope(scope_id).expect(format!("Scope {scope_id} does not exist.").as_str()).clone();
+	let mut scope = manager.get_scope_mut(scope_id).expect(format!("Scope {scope_id} does not exist.").as_str()).clone();
 	let block = scope.block.clone();
 	let mut result = BlockOutput::None;
 
@@ -75,14 +75,28 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, last_conditiona
 			}
 			InstructionEnum::VariableDeclaration(name, value, method) => {
 				let evaluated_value = value.evaluate(scope_id, manager);
-				let previous_value = manager.get_var(scope_id, name.clone());
-				// println!("Prev value: {:?}, now: {:?}", previous_value.clone().unwrap_or(1.0.into()), evaluated_value.clone());
-				match method {
-					AssignmentMethod::Set => manager.define_var(scope_id, name, evaluated_value),
-					AssignmentMethod::Add => manager.define_var(scope_id, name, previous_value.unwrap() + evaluated_value),
-					AssignmentMethod::Sub => manager.define_var(scope_id, name, previous_value.unwrap() - evaluated_value),
-					AssignmentMethod::Mul => manager.define_var(scope_id, name, previous_value.unwrap() * evaluated_value),
-					AssignmentMethod::Div => manager.define_var(scope_id, name, previous_value.unwrap() / evaluated_value),
+				let new_value = match method {
+					AssignmentMethod::Set => evaluated_value,
+					AssignmentMethod::Add => evaluated_value,
+					AssignmentMethod::Sub => evaluated_value,
+					AssignmentMethod::Mul => evaluated_value,
+					AssignmentMethod::Div => evaluated_value,
+				};
+				
+				let mut temp_scope_id = scope_id.clone();
+				loop {
+					let current_scope_var = manager.does_var_exists(scope_id, name.clone());
+					if current_scope_var {
+						manager.set_var(temp_scope_id, name.clone(), new_value.clone());
+						break;
+					} else {
+						if let Some(parent) = manager.get_parent(temp_scope_id) {
+							temp_scope_id = parent;
+						} else {
+							manager.set_var(temp_scope_id, name.clone(), new_value.clone());
+							break;
+						}
+					}
 				}
 			}
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => {
@@ -128,6 +142,7 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, last_conditiona
 			_ => todo!(),
 		}
 	}
+	scope.ranScope = true;
 	result
 }
 
@@ -154,7 +169,10 @@ pub fn ProcessLine(
 	// let current_scope = manager.get_scope(current_scope_id.clone()).unwrap();
 	if instr.0.indent {
 		let mut instr_enum = instr.clone().1;
-		let new_scope = manager.create_scope(Some(*current_scope_id), Some(instr_enum.as_block_action())); // Create new scope
+		let new_scope = match instr.1 {
+			InstructionEnum::IfBlock { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
+			_ => manager.create_scope(Some(*current_scope_id), Some(instr_enum.as_block_action()))
+		};
 		instr_enum.set_block_pointer(new_scope); // Set the instruction's pointer to the new scope
 		manager.push_code_to_scope(*current_scope_id, &instr_enum); // Push the instruction to the parent block
 		*current_scope_id = new_scope;

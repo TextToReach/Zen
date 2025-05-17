@@ -4,6 +4,7 @@ mod features;
 mod library;
 mod parsers;
 mod util;
+mod test;
 
 use std::{
 	cell::RefCell,
@@ -22,6 +23,7 @@ use library::{
 	Methods::Throw,
 	Types::{Severity, ZenError},
 };
+use test::test::run_tests;
 use util::process;
 
 /// Ana CLI aracı
@@ -54,6 +56,8 @@ enum Commands {
 		#[arg(long, default_value_t = false)]
 		noexecute: bool,
 	},
+
+	Test
 }
 
 fn run_zen_file(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool, noexecute: bool) {
@@ -85,6 +89,9 @@ fn main() {
 			noexecute,
 		} => {
 			run_zen_file(file, verbose, printast, printpreprocessoutput, noexecute);
+		}
+		Commands::Test => {
+			run_tests();
 		}
 	}
 }

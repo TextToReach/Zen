@@ -11,25 +11,14 @@ pub mod Continue;
 pub mod WhileTrue;
 
 pub mod Parsers {
-	use super::Break;
-	use super::Continue;
-	use super::Define;
-	use super::If;
-	use super::Elif;
-	use super::Else;
-	use super::Print;
-	use super::Repeat;
-use super::WhileTrue;
-	use crate::features::tokenizer::AssignmentMethod;
-	use crate::features::tokenizer::InstructionEnum;
-	use crate::features::tokenizer::TokenData;
-	use crate::features::tokenizer::TokenTable;
-	use crate::library::Types::Object;
-	use crate::util::ScopeManager::ScopeManager;
-	use chumsky::prelude::*;
-	use num::pow::Pow;
-	use std::fmt::Display;
-	use std::rc::Rc;
+    use super::{Break, Continue, Define, Elif, Else, If, Print, Repeat, WhileTrue};
+    use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable};
+    use crate::library::Types::Object;
+    use crate::util::ScopeManager::ScopeManager;
+    use chumsky::prelude::*;
+    use num::pow::Pow;
+    use std::fmt::Display;
+    use std::rc::Rc;
 
 	type ParserType1 = Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>>;
 	type ParserType2 = Box<dyn Parser<TokenData, (ParserOutput, InstructionEnum), Error = Simple<TokenData>>>;

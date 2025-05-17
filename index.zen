@@ -1,5 +1,6 @@
-i = 0
 10 kere tekrarla
-	i += 1
-	eğer i % 2 != 0 ise
-		yazdır "i bir tek sayı:", i
+	i = 0
+	5 kere tekrarla
+		i = i + 1
+		eğer i % 2 == 0 ise
+			yazdır "i çift", i
