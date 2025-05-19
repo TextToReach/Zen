@@ -11,6 +11,8 @@ const_format = "0.2.34"
 ctrlc = "3.4.6"
 defer = "0.2.1"
 logos = "0.15.0"
+miette = { version = "7.6.0", features = ["fancy"] }
 num = "0.4.3"
 rand = "0.9.1"
 regex = "1.11.1"
+thiserror = "2.0.12"

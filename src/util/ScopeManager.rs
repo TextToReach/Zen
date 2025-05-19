@@ -4,16 +4,14 @@ use std::{
 	thread::scope,
 };
 
-use crate::{features::tokenizer::InstructionEnum, library::Types::Object, parsers::Parsers::Expression};
+use crate::{features::tokenizer::InstructionEnum, library::Types::{Boolean, Object}, parsers::Parsers::Expression};
 
 #[derive(Debug, Clone)]
 pub enum ScopeAction {
 	RootScope,
 	Repeat(f64),
 	WhileTrue,
-	IfBlock { condition: Expression },
-	ElifBlock { condition: Expression },
-	ElseBlock,
+	Condition(Expression),
 }
 
 impl Display for ScopeAction {
@@ -27,8 +25,75 @@ pub enum TransparentScopeOption {
 	True { parent: usize },
 	False,
 }
-
 use TransparentScopeOption::*;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConditionStructure {
+	pub scope_pointer: usize,	
+	pub condition: Expression
+}
+
+impl ConditionStructure {
+	pub fn empty() -> Self {
+		Self {
+			condition: Expression::falsy(),
+			scope_pointer: 0
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		matches!(self.condition, Expression::Value(ref obj) if matches!(**obj, Object::Bool(Boolean { value: false })))
+			&& self.scope_pointer == 0
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConditionBlock {
+	pub If: ConditionStructure,
+	pub Elif: Vec<ConditionStructure>,
+	pub Else: ConditionStructure
+}
+
+impl ConditionBlock {
+	pub fn empty() -> Self {
+		Self {
+			If: ConditionStructure::empty(),
+			Elif: vec![],
+			Else: ConditionStructure::empty(),
+		}
+	}
+
+	pub fn clear(&mut self) {
+		*self = Self::empty()
+	}
+
+	pub fn new(If: ConditionStructure) -> Self {
+		Self {
+			If,
+			Elif: vec![],
+			Else: ConditionStructure::empty(),
+		}
+		
+	}
+
+	pub fn push_elif(&mut self, Elif: ConditionStructure) {
+		self.Elif.push(Elif);
+	}
+	
+	pub fn push_elifs(&mut self, Elifs: Vec<ConditionStructure>) {
+		for Elif in Elifs {
+			self.Elif.push(Elif);
+		}
+	}
+
+	pub fn push_else(&mut self, Else: ConditionStructure) {
+		self.Else = Else
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.If.is_empty()
+	}
+}
 
 #[derive(Debug, Clone)]
 pub struct Scope {
@@ -38,8 +103,7 @@ pub struct Scope {
 	pub action: Option<ScopeAction>,
 	pub block: Vec<InstructionEnum>,
 	pub variables: HashMap<String, Object>,
-	pub isTransparent: TransparentScopeOption,
-	pub ranScope: bool,
+	pub is_transparent: TransparentScopeOption,
 }
 
 #[derive(Debug, Clone)]
@@ -50,12 +114,10 @@ pub struct ScopeManager {
 
 impl ScopeManager {
 	pub fn new() -> Self {
-		let mut manager = Self {
+		Self {
 			scopes: HashMap::new(),
 			next_id: 0,
-		};
-		manager.create_scope(None, None); // root scope
-		manager
+		}
 	}
 
 	pub fn create_scope(&mut self, parent_id: Option<usize>, action: Option<ScopeAction>) -> usize {
@@ -69,25 +131,24 @@ impl ScopeManager {
 			children: HashSet::new(),
 			block: Vec::new(),
 			variables: HashMap::new(),
-			isTransparent: False,
-			ranScope: false
+			is_transparent: False,
 		};
-
+		
 		if let Some(pid) = parent_id {
 			if let Some(parent_scope) = self.scopes.get_mut(&pid) {
 				parent_scope.children.insert(id);
 			}
 		}
-
+		
 		self.scopes.insert(id, scope);
 		id
 	}
-
+	
 	/// Transparent scopes redirect variable declaration requests to the upper scope.
 	pub fn create_transparent_scope(&mut self, parent_id: usize, action: Option<ScopeAction>) -> usize {
 		let id = self.next_id;
 		self.next_id += 1;
-
+		
 		let scope = Scope {
 			id,
 			action,
@@ -95,8 +156,7 @@ impl ScopeManager {
 			children: HashSet::new(),
 			block: Vec::new(),
 			variables: HashMap::new(),
-			isTransparent: True { parent: parent_id },
-			ranScope: false
+			is_transparent: True { parent: parent_id },
 		};
 
 		if let Some(parent_scope) = self.scopes.get_mut(&parent_id) {
@@ -163,7 +223,7 @@ impl ScopeManager {
 		let mut current_id = scope_id;
 		loop {
 			let is_transparent = match self.get_scope(current_id) {
-				Some(scope) => scope.isTransparent,
+				Some(scope) => scope.is_transparent,
 				None => break,
 			};
 			match is_transparent {

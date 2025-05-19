@@ -3,8 +3,8 @@
 mod features;
 mod library;
 mod parsers;
-mod util;
 mod test;
+mod util;
 
 use std::{
 	cell::RefCell,
@@ -55,17 +55,23 @@ enum Commands {
 
 		#[arg(long, default_value_t = false)]
 		noexecute: bool,
+
+		#[arg(long, default_value_t = true)]
+		strict: bool,
 	},
 
-	Test
+	Test,
 }
 
-fn run_zen_file(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool, noexecute: bool) {
-	let contents = match File::open(&file) { Ok(res) => { let lines = read_to_string(file); match lines { Ok(lines) => { let mut buffr = Vec::new(); for line in lines.lines() { buffr.push(line.to_string()); } buffr } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } } } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } };
-	process::index(&mut contents.clone());
+fn run_zen_file(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool, noexecute: bool, strict: bool) -> miette::Result<()> {
+	let mut full_src = String::new();
+	let contents = match File::open(&file) { Ok(res) => { let lines = read_to_string(&file); match lines { Ok(lines) => { full_src = lines.clone(); let mut buffr = Vec::new(); for line in lines.lines() { buffr.push(line.to_string()); } buffr } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } } } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } };
+	process::index(&mut contents.clone(), full_src, verbose, strict, &file)?;
+
+	Ok(())
 }
 
-fn main() {
+fn main() -> miette::Result<()> {
 	let cli = Cli::parse();
 	ctrlc::set_handler(|| {
         println!("\nProgram sonlandırılıyor...");
@@ -87,11 +93,13 @@ fn main() {
 			printast,
 			printpreprocessoutput,
 			noexecute,
+			strict,
 		} => {
-			run_zen_file(file, verbose, printast, printpreprocessoutput, noexecute);
+			run_zen_file(file, verbose, printast, printpreprocessoutput, noexecute, strict)?;
 		}
 		Commands::Test => {
 			run_tests();
 		}
 	}
+	Ok(())
 }

@@ -1,6 +1,8 @@
-10 kere tekrarla
-	i = 0
-	5 kere tekrarla
-		i = i + 1
-		eğer i % 2 == 0 ise
-			yazdır "i çift", i
+i = 4
+eğer i << 2 ise
+	yazdır "i 2'den küçük"
+değilse ve i >> 5 ise
+		yazdır "i 5'ten büyük"
+	// Bu satırın 2 tab içeride olması bir güzel hata oluşturuyor.
+değilse
+	yazdır "i bi bok değil"

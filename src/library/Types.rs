@@ -293,27 +293,6 @@ pub enum ZenError {
 	IndentationError,
 }
 
-pub mod Operator {
-	#[derive(Debug, Clone, PartialEq)]
-	pub enum Arithmetic {
-		Plus,
-		Minus,
-		Multiply,
-		Divide,
-		Mod,
-	}
-
-	#[derive(Debug, Clone, PartialEq)]
-	pub enum Comparison {
-		Equal,
-		NotEqual,
-		GreaterThan,
-		LessThan,
-		GreaterThanOrEqual,
-		LessThanOrEqual,
-	}
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Severity {
 	Low = 1,

@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 
 use std::{
-	fmt::{write, Debug, Display},
-	ops::{Not, Range},
+	default, fmt::{write, Debug, Display}, ops::{Not, Range}
 };
 
-use crate::{library::Types::Object, parsers::Parsers::Expression, util::ScopeManager::ScopeAction};
+use crate::{library::Types::Object, parsers::Parsers::Expression, util::ScopeManager::{ConditionBlock, ScopeAction}};
 use logos::Logos;
 
 #[derive(Clone, Logos, Debug, PartialEq, PartialOrd, Hash, Eq)]
@@ -282,9 +281,6 @@ impl RemoveQuotes for String {
 			return self[1..self.len() - 1].to_string();
 		}
 		self.clone()
-		//  else {
-		// 	panic!("The string slice doesn't start and end with (\") symbol. This is probably the lexer's fault.")
-		// }
 	}
 }
 
@@ -322,6 +318,20 @@ impl Eq for TokenData {}
 pub enum AssignmentMethod { Set, Add, Sub, Mul, Div }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ConditionBlockType {
+	If,
+	Elif,
+	Else,
+	None
+}
+
+impl ConditionBlockType {
+	pub fn is_one_of(&self, types: &[ConditionBlockType]) -> bool {
+		types.iter().any(|t| t == self)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
 	NoOp,
 	Print(Vec<Expression>),
@@ -330,9 +340,10 @@ pub enum InstructionEnum {
 	// BLOCKS
 	Repeat 		{ scope_pointer: usize, repeat_count: f64 },
 	WhileTrue 	{ scope_pointer: usize },
-	IfBlock 	{ scope_pointer: usize, condition: Expression },
-	ElifBlock 	{ scope_pointer: usize, condition: Expression },
-	ElseBlock 	{ scope_pointer: usize },
+	IfBlock { scope_pointer: usize, condition: Expression },
+	ElifBlock { scope_pointer: usize, condition: Expression },
+	ElseBlock { scope_pointer: usize },
+	Condition(ConditionBlock),
 	// BLOCKS
 
 	VariableDeclaration(String, Expression, AssignmentMethod),
@@ -353,11 +364,20 @@ impl InstructionEnum {
 	}
 	pub fn as_block_action(&self) -> ScopeAction {
 		match self {
-			InstructionEnum::IfBlock { condition, scope_pointer } => ScopeAction::IfBlock{ condition: condition.clone() },
-			InstructionEnum::ElifBlock { condition, scope_pointer } => ScopeAction::ElifBlock{ condition: condition.clone() },
-			InstructionEnum::ElseBlock { .. } => ScopeAction::ElseBlock,
+			InstructionEnum::IfBlock { condition, ..} => ScopeAction::Condition( condition.clone() ),
+			InstructionEnum::ElifBlock { condition, ..} => ScopeAction::Condition( condition.clone() ),
+			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition( Expression::truthy() ),
 			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(*repeat_count),
+			_ => panic!()
+		}
+	}
+	
+	pub fn as_expression(&self) -> Expression {
+		match self {
+			InstructionEnum::IfBlock { condition, ..} => condition.clone(),
+			InstructionEnum::ElifBlock { condition, ..} => condition.clone(),
+			InstructionEnum::ElseBlock { .. } => Expression::truthy(),
 			_ => panic!()
 		}
 	}
@@ -366,7 +386,7 @@ impl InstructionEnum {
 		match self {
 			InstructionEnum::IfBlock { scope_pointer, .. } |
 			InstructionEnum::ElifBlock { scope_pointer, .. } |
-			InstructionEnum::ElseBlock { scope_pointer } |
+			InstructionEnum::ElseBlock { scope_pointer, .. } |
 			InstructionEnum::WhileTrue { scope_pointer } |
 			InstructionEnum::Repeat { scope_pointer, .. } => {
 				*scope_pointer = pointer

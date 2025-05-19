@@ -1,0 +1,67 @@
+block: [
+    VariableDeclaration(
+        "i",
+        Value(
+            Number(
+                Number {
+                    value: 0.0,
+                },
+            ),
+        ),
+        Set,
+    ),
+    Condition(
+        ConditionBlock {
+            If: ConditionStructure {
+                scope_pointer: 1,
+                condition: LessThan(
+                    Value(
+                        Variable(
+                            "i",
+                        ),
+                    ),
+                    Value(
+                        Number(
+                            Number {
+                                value: 2.0,
+                            },
+                        ),
+                    ),
+                ),
+            },
+            Elif: [],
+            Else: ConditionStructure {
+                scope_pointer: 0,
+                condition: Value(
+                    Bool(
+                        Boolean {
+                            value: false,
+                        },
+                    ),
+                ),
+            },
+        },
+    ),
+    Print(
+        [
+            Value(
+                Text(
+                    Text {
+                        value: "i 5'ten büyük",
+                    },
+                ),
+            ),
+        ],
+    ),
+    Print(
+        [
+            Value(
+                Text(
+                    Text {
+                        value: "i bi bok değil",
+                    },
+                ),
+            ),
+        ],
+    ),
+],

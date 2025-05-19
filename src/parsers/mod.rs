@@ -75,6 +75,13 @@ pub mod Parsers {
 	}
 
 	impl Expression {
+		pub fn truthy() -> Self {
+			Self::Value(Box::new(true.into()))
+		}
+		pub fn falsy() -> Self {
+			Self::Value(Box::new(false.into()))
+		}
+		
 		pub fn evaluate(&self, currentScope: usize, manager: &mut ScopeManager) -> Object {
 			match self {
 				Expression::Value(val) => {
