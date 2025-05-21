@@ -35,6 +35,8 @@ pub enum TokenTable {
 	KeywordSürekliTekrarla,
 	#[regex(r"(?:defa|kere|kez)[ \t]+tekrarla")]
 	KeywordNDefaTekrarla,
+	#[token(r"fonksiyon")]
+	KeywordFonksiyon,
 	#[regex(r"devam[ \t]+et")]
 	KeywordDevamEt,
 	#[regex(r"durdur")]
@@ -140,6 +142,7 @@ impl Display for TokenTable {
 			TokenTable::KeywordYazdır => write!(f, "KeywordYazdır"),
 			TokenTable::KeywordSürekliTekrarla => write!(f, "KeywordSürekliTekrarla"),
 			TokenTable::KeywordNDefaTekrarla => write!(f, "KeywordNDefaTekrarla"),
+			TokenTable::KeywordFonksiyon => write!(f, "KeywordFonksiyon"),
 			TokenTable::KeywordDurdur => write!(f, "KeywordDurdur"),
 			TokenTable::KeywordDevamEt => write!(f, "KeywordDevamEt"),
 			TokenTable::MathOperatorAdd => write!(f, "OperatorAdd"),
@@ -239,6 +242,14 @@ impl TokenData {
 			_ => String::new(),
 		}
 	}
+
+	pub fn asIdentifier(&self) -> String {
+		match self.token {
+			TokenTable::Identifier => self.slice.clone(), // TODO: Replace all unwrap_or statements with proper errors.
+			_ => String::new(),
+		}
+	}
+
 	pub fn asBooleanLiteral(&self) -> bool {
 		match self.token {
 			TokenTable::BooleanLiteral => match self.slice.as_str() {
@@ -344,8 +355,10 @@ pub enum InstructionEnum {
 	ElifBlock { scope_pointer: usize, condition: Expression },
 	ElseBlock { scope_pointer: usize },
 	Condition(ConditionBlock),
+	Function { name: String, args: Vec<TokenData>, scope_pointer: usize },
 	// BLOCKS
 
+	CallFunction { name: String, args: Vec<Expression> },
 	VariableDeclaration(String, Expression, AssignmentMethod),
 	Break,
 	Continue
@@ -369,6 +382,7 @@ impl InstructionEnum {
 			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition( Expression::truthy() ),
 			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(*repeat_count),
+			InstructionEnum::Function { name, args, scope_pointer } => ScopeAction::Function { name: name.clone(), args: args.clone() },
 			_ => panic!()
 		}
 	}
@@ -388,6 +402,7 @@ impl InstructionEnum {
 			InstructionEnum::ElifBlock { scope_pointer, .. } |
 			InstructionEnum::ElseBlock { scope_pointer, .. } |
 			InstructionEnum::WhileTrue { scope_pointer } |
+			InstructionEnum::Function { scope_pointer, .. } |
 			InstructionEnum::Repeat { scope_pointer, .. } => {
 				*scope_pointer = pointer
 			}

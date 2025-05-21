@@ -1,8 +1,6 @@
-i = 4
-eğer i << 2 ise
-	yazdır "i 2'den küçük"
-değilse ve i >> 5 ise
-		yazdır "i 5'ten büyük"
-	// Bu satırın 2 tab içeride olması bir güzel hata oluşturuyor.
-değilse
-	yazdır "i bi bok değil"
+fonksiyon selamla()
+	yazdır "merhaba"
+
+
+10 kere tekrarla
+	selamla()

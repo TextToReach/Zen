@@ -68,6 +68,13 @@ impl From<(&Object, &Object)> for ObjectComparison {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Function {
+	pub name: String,
+	pub args: Vec<TokenData>,
+	pub scope_pointer: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Object {
 	Number(Number),
 	Text(Text),
@@ -278,12 +285,6 @@ impl PartialOrd for Object {
 }
 
 #[derive(Debug, Clone)]
-pub struct ZenNamedParameter {
-	name: String,
-	value: Object,
-}
-
-#[derive(Debug, Clone)]
 pub enum ZenError {
 	UnknownError,
 	GeneralError,
@@ -340,20 +341,6 @@ pub struct Boolean {
 pub struct Variable {
 	pub value: String,
 }
-
-#[derive(Debug, Clone)]
-pub struct Function {
-	pub parameters: Vec<ZenNamedParameter>,
-	// TODO: After adding zenvm functionality, complete this part.
-}
-
-// ------------------------------------------ Parser Implements ------------------------------------------
-
-/* impl<'a> Parsable<'a, char, Object, Simple<char>> for Number {
-	fn parser(currentScope: Rc<RefCell<usize>>, manager: &mut ScopeManager) -> Box<dyn Parser<char, Object, Error = Simple<char>> + 'a> {
-		
-	}
-} */
 
 // ------------------------------------------ Trait Implements ------------------------------------------
 

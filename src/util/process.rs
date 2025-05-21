@@ -68,6 +68,12 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput 
 					}
 				}
 			}
+			InstructionEnum::Function { name, args, scope_pointer } => {
+				manager.declare_function(scope_id, name.clone(), args.clone(), scope_pointer.clone());
+			}
+			InstructionEnum::CallFunction { name, args } => {
+				ExecuteBlock(manager.get_function(scope_id, name.clone()).unwrap().scope_pointer, manager);
+			}
 			InstructionEnum::Break => {
 				result = BlockOutput::Break;
 				break;
@@ -146,7 +152,6 @@ pub fn ProcessLine(
 	let line_feed_tab_count = line_feed.count_from_start(|x| x.token == TokenTable::Tab);
 	let inferred_scope_depth = manager.get_depth(current_scope_id.clone());
 
-	println!("{}", full_source);
 	if line_feed_tab_count != inferred_scope_depth {
 		if line_feed_tab_count > inferred_scope_depth && opts.strict {
 			return Err(GirintiHatası {
@@ -168,7 +173,7 @@ pub fn ProcessLine(
 			InstructionEnum::IfBlock { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
 			InstructionEnum::ElifBlock { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
 			InstructionEnum::ElseBlock { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
-			InstructionEnum::Repeat { .. } => manager.create_scope(Some(*current_scope_id), Some(instr_enum.as_block_action())),
+			InstructionEnum::Function { .. } => manager.create_isolated_scope(*current_scope_id, Some(instr_enum.as_block_action())),
 			_ => manager.create_scope(Some(*current_scope_id), Some(instr_enum.as_block_action())),
 		};
 
@@ -239,7 +244,6 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 			if !line_feed_without_tabs.starts_with(&[TokenTable::Comment.asTokenData()]) {
 				match Parsers::parser().parse(line_feed_without_tabs.clone()) {
 					Ok(res) => {
-						let feedIndentLevel = raw_line_feed.count_from_start(|x| x.token == TokenTable::Tab);
 						match ProcessLine(chunk.to_owned(), full_source.clone(), raw_line_feed, res.clone(), &mut currentScope, &mut manager, &opts, (filename, line_index)) {
 							Err(e) => {
 								return Err(e);

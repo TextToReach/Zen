@@ -9,9 +9,11 @@ pub mod Repeat;
 pub mod Break;
 pub mod Continue;
 pub mod WhileTrue;
+pub mod Function;
+pub mod FunctionCall;
 
 pub mod Parsers {
-    use super::{Break, Continue, Define, Elif, Else, If, Print, Repeat, WhileTrue};
+    use super::{Break, Continue, Define, Elif, Else, Function, FunctionCall, If, Print, Repeat, WhileTrue};
     use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable};
     use crate::library::Types::Object;
     use crate::util::ScopeManager::ScopeManager;
@@ -48,6 +50,8 @@ pub mod Parsers {
 				WithIndentation(Elif::parser()),
 				WithIndentation(Else::parser()),
 				WithIndentation(WhileTrue::parser()),
+				WithIndentation(Function::parser()),
+				WithoutIndentation(FunctionCall::parser()),
 				WithoutIndentation(Print::parser()),
 				WithoutIndentation(Define::parser()),
 				WithoutIndentation(Break::parser()),
@@ -249,5 +253,9 @@ pub mod Parsers {
 
 	pub fn boolean() -> Box<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>> {
 		Box::new(filter(|x: &TokenData| x.token == TokenTable::BooleanLiteral))
+	}
+
+	pub fn identifier() -> Box<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>> {
+		Box::new(filter(|x: &TokenData| x.token == TokenTable::Identifier))
 	}
 }

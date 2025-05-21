@@ -4,7 +4,7 @@ use std::{
 	thread::scope,
 };
 
-use crate::{features::tokenizer::InstructionEnum, library::Types::{Boolean, Object}, parsers::Parsers::Expression};
+use crate::{features::tokenizer::{InstructionEnum, TokenData}, library::Types::{Boolean, Function, Object}, parsers::Parsers::Expression};
 
 #[derive(Debug, Clone)]
 pub enum ScopeAction {
@@ -12,6 +12,7 @@ pub enum ScopeAction {
 	Repeat(f64),
 	WhileTrue,
 	Condition(Expression),
+	Function { name: String, args: Vec<TokenData> },
 }
 
 impl Display for ScopeAction {
@@ -21,11 +22,25 @@ impl Display for ScopeAction {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum TransparentScopeOption {
-	True { parent: usize },
-	False,
+pub enum ScopeType {
+	Transparent { parent: usize },
+	Isolated,
+	Default,
 }
-use TransparentScopeOption::*;
+
+impl ScopeType {
+	pub fn is_transparent(&self) -> bool {
+		matches!(self, Transparent { .. })
+	}
+	pub fn is_isolated(&self) -> bool {
+		matches!(self, Isolated)
+	}
+	pub fn is_default(&self) -> bool {
+		matches!(self, Default)
+	}
+}
+
+use ScopeType::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConditionStructure {
@@ -103,7 +118,8 @@ pub struct Scope {
 	pub action: Option<ScopeAction>,
 	pub block: Vec<InstructionEnum>,
 	pub variables: HashMap<String, Object>,
-	pub is_transparent: TransparentScopeOption,
+	pub functions: HashMap<String, Function>,
+	pub scope_type: ScopeType,
 }
 
 #[derive(Debug, Clone)]
@@ -131,7 +147,8 @@ impl ScopeManager {
 			children: HashSet::new(),
 			block: Vec::new(),
 			variables: HashMap::new(),
-			is_transparent: False,
+			functions: HashMap::new(),
+			scope_type: Default,
 		};
 		
 		if let Some(pid) = parent_id {
@@ -155,8 +172,33 @@ impl ScopeManager {
 			parent: Some(parent_id),
 			children: HashSet::new(),
 			block: Vec::new(),
+			functions: HashMap::new(),
 			variables: HashMap::new(),
-			is_transparent: True { parent: parent_id },
+			scope_type: Transparent { parent: parent_id },
+		};
+
+		if let Some(parent_scope) = self.scopes.get_mut(&parent_id) {
+			parent_scope.children.insert(id);
+		}
+
+		self.scopes.insert(id, scope);
+		id
+	}
+
+	/// Isolated scopes don't redirect variable requests to the upper scope.
+	pub fn create_isolated_scope(&mut self, parent_id: usize, action: Option<ScopeAction>) -> usize {
+		let id = self.next_id;
+		self.next_id += 1;
+		
+		let scope = Scope {
+			id,
+			action,
+			parent: Some(parent_id),
+			children: HashSet::new(),
+			block: Vec::new(),
+			functions: HashMap::new(),
+			variables: HashMap::new(),
+			scope_type: Isolated,
 		};
 
 		if let Some(parent_scope) = self.scopes.get_mut(&parent_id) {
@@ -223,14 +265,14 @@ impl ScopeManager {
 		let mut current_id = scope_id;
 		loop {
 			let is_transparent = match self.get_scope(current_id) {
-				Some(scope) => scope.is_transparent,
+				Some(scope) => scope.scope_type,
 				None => break,
 			};
 			match is_transparent {
-				True { parent } => {
+				Transparent { parent } => {
 					current_id = parent;
 				}
-				False => {
+				Default | Isolated => {
 					if let Some(scope) = self.scopes.get_mut(&current_id) {
 						scope.variables.insert(name, value);
 					}
@@ -240,11 +282,6 @@ impl ScopeManager {
 		}
 	}
 
-	pub fn get_var_in_scope<T: AsRef<str>>(&self, scope_id: usize, name: T) -> Option<Object> {
-		let name = name.as_ref();
-		self.scopes.get(&scope_id)?.variables.get(name).cloned()
-	}
-	
 	pub fn does_var_exists<T: AsRef<str>>(&self, scope_id: usize, name: T) -> bool {
 		let name = name.as_ref();
 		if let Some(_) = self.get_var_in_scope(scope_id, name) {
@@ -253,12 +290,26 @@ impl ScopeManager {
 			false
 		}
 	}
+	
+	pub fn get_var_in_scope<T: AsRef<str>>(&self, scope_id: usize, name: T) -> Option<Object> {
+		let name = name.as_ref();
+		self.scopes.get(&scope_id)?.variables.get(name).cloned()
+	}
+	
 	/// Use this to retrieve variables.
 	pub fn get_var<T: AsRef<str>>(&self, mut scope_id: usize, name: T) -> Option<Object> {
 		let name = name.as_ref();
 		loop {
 			if let Some(value) = self.get_var_in_scope(scope_id, name) {
 				return Some(value);
+			}
+			// Check if current scope is isolated; if so, stop searching
+			if let Some(scope) = self.get_scope(scope_id) {
+				if scope.scope_type.is_isolated() {
+					break;
+				}
+			} else {
+				break;
 			}
 			if let Some(parent_id) = self.get_parent(scope_id) {
 				scope_id = parent_id;
@@ -287,5 +338,38 @@ impl ScopeManager {
 			id = parent_id;
 		}
 		depth
+	}
+
+	pub fn declare_function(&mut self, scope_id: usize, name: String, args: Vec<TokenData>, scope_pointer: usize) {
+		let function_obj = Function {
+			name: name.clone(),
+			args: args.clone(),
+			scope_pointer: scope_pointer,
+		};
+		if let Some(scope) = self.scopes.get_mut(&scope_id) {
+			scope.functions.insert(name, function_obj);
+		}
+	}
+
+	pub fn get_function<T: AsRef<str>>(&self, mut scope_id: usize, name: T) -> Option<Function> {
+		let name = name.as_ref();
+		loop {
+			if let Some(scope) = self.get_scope(scope_id) {
+				if let Some(function) = scope.functions.get(name) {
+					return Some(function.clone());
+				}
+				if scope.scope_type.is_isolated() {
+					break;
+				}
+				if let Some(parent_id) = scope.parent {
+					scope_id = parent_id;
+				} else {
+					break;
+				}
+			} else {
+				break;
+			}
+		}
+		None
 	}
 }
