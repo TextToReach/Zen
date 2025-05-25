@@ -327,11 +327,11 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(3));
 
 	if let Some((w, h)) = term_size::dimensions() {
-		manager.set_global(root_scope, "ekrangenisligi".to_string(), Object::from(w as f64));
-		manager.set_global(root_scope, "ekranyuksekligi".to_string(), Object::from(h as f64));
+		manager.set_global(root_scope, "ekrangenişliği".to_string(), Object::from(w as f64));
+		manager.set_global(root_scope, "ekranyüksekliği".to_string(), Object::from(h as f64));
 	} else {
-		manager.set_global(root_scope, "ekrangenisligi".to_string(), Object::from(0 as f64));
-		manager.set_global(root_scope, "ekranyuksekligi".to_string(), Object::from(0 as f64));
+		manager.set_global(root_scope, "ekrangenişliği".to_string(), Object::from(0 as f64));
+		manager.set_global(root_scope, "ekranyüksekliği".to_string(), Object::from(0 as f64));
 	}
 
 	ExecuteBlock(

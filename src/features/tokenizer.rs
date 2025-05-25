@@ -121,7 +121,7 @@ pub enum TokenTable {
 	#[regex(r"-(0|[1-9][0-9]*)(\.[0-9]+)?")]
 	NegativeNumberLiteral,
 
-	#[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
+	#[regex(r"[abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ_][abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ0-9_]*")]
 	Identifier,
 
 	#[regex(r"[ \n\r]+", logos::skip)]

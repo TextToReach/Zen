@@ -1,11 +1,29 @@
-// Bir küp çiziyor!
 
-ortabosluk = ekrangenisligi - 2
-fonksiyon kubyap(a: metin = "sa" + "as", b: sayı, ortabosluk: sayı)
-	yazdır a * ekrangenisligi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Bir küp çiziyor.
+
+fonksiyon küpçiz(a: metin = "sa" + "as", b: sayı)
+	yazdır a * ekrangenişliği
 	i = 10
 	b - 2 kere tekrarla
-		yazdır "*", " " * ortabosluk, "*"
-	yazdır a * ekrangenisligi
+		yazdır "*", " " * (ekrangenişliği - 4), "*"
+	yazdır a * ekrangenişliği
 
-kubyap("*", ekranyuksekligi - 3, ekrangenisligi - 4)
+küpçiz("*", ekranyüksekliği - 3)
+
+
