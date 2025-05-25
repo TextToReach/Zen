@@ -35,6 +35,14 @@ pub enum TokenTable {
 	KeywordVe,
 	#[token("veya")]
 	KeywordVeya,
+	#[token("ile")]
+	Keywordİle,
+	#[token("aralığında")]
+	KeywordAralığında,
+	#[token("artarak")]
+	KeywordArtarak,
+	#[token("değil")]
+	KeywordDeğil,
 
 	#[token("yazdır")]
 	KeywordYazdır,
@@ -118,7 +126,7 @@ pub enum TokenTable {
 	StringLiteral,
 	#[regex(r"(0|[1-9][0-9]*)(\.[0-9]+)?")]
 	NumberLiteral,
-	#[regex(r"[abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ_][abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ0-9_]*")]
+	#[regex(r"[abcçdefgğhıijklmnoöprsştuüvyzqwxABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZQWX_][abcçdefgğhıijklmnoöprsştuüvyzqwxABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZQWX0-9_]*")]
 	Identifier,
 
 	#[regex(r"[ \n\r]+", logos::skip)]
@@ -307,6 +315,7 @@ pub enum InstructionEnum {
 	
 	// BLOCKS
 	Repeat 		{ scope_pointer: usize, repeat_count: Expression },
+	For { from: Expression, to: Expression, step: Option<Expression>, name: String, scope_pointer: usize },
 	WhileTrue 	{ scope_pointer: usize },
 	IfBlock { scope_pointer: usize, condition: Expression },
 	ElifBlock { scope_pointer: usize, condition: Expression },
@@ -339,6 +348,7 @@ impl InstructionEnum {
 			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition( Expression::truthy() ),
 			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(repeat_count.clone()),
+			InstructionEnum::For { from, to, step, name, scope_pointer } => ScopeAction::For(from.clone(), to.clone(), step.clone(), name.clone()),
 			InstructionEnum::Function { name, args, scope_pointer } => ScopeAction::Function { name: name.clone(), args: args.clone() },
 			_ => panic!()
 		}
@@ -360,6 +370,7 @@ impl InstructionEnum {
 			InstructionEnum::ElseBlock { scope_pointer, .. } |
 			InstructionEnum::WhileTrue { scope_pointer } |
 			InstructionEnum::Function { scope_pointer, .. } |
+			InstructionEnum::For { scope_pointer, .. } |
 			InstructionEnum::Repeat { scope_pointer, .. } => {
 				*scope_pointer = pointer
 			}

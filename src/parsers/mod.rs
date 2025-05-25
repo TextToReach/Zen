@@ -11,9 +11,10 @@ pub mod If;
 pub mod Print;
 pub mod Repeat;
 pub mod WhileTrue;
+pub mod For;
 
 pub mod Parsers {
-	use super::{Break, Continue, Define, Elif, Else, Function, FunctionCall, If, Print, Repeat, WhileTrue};
+	use super::{Break, Continue, Define, Elif, Else, For, Function, FunctionCall, If, Print, Repeat, WhileTrue};
 	use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable};
 	use crate::library::Types::{Object, ParameterData};
 	use crate::util::ScopeManager::ScopeManager;
@@ -51,6 +52,7 @@ pub mod Parsers {
 				WithIndentation(Else::parser()),
 				WithIndentation(WhileTrue::parser()),
 				WithIndentation(Function::parser()),
+				WithIndentation(For::parser()),
 				WithoutIndentation(FunctionCall::parser()),
 				WithoutIndentation(Print::parser()),
 				WithoutIndentation(Define::parser()),

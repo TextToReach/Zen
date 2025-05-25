@@ -73,17 +73,38 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 					}
 				}
 			}
+			InstructionEnum::For {
+				from,
+				to,
+				step,
+				name,
+				scope_pointer,
+			} => {
+				for index in ((from.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64
+					..(to.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64).step_by(
+						(step.unwrap_or(Expression::Value(Box::new(Object::from(1f64)))).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as usize
+					)
+				{
+					manager.set_var(scope_pointer, name.clone(), Object::from(index as f64));
+					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
+						Ok(BlockOutput::Break) => break,
+						Ok(BlockOutput::Continue) => continue,
+						Ok(BlockOutput::None) => {}
+						Err(e) => {
+							return Err(e);
+						}
+					}
+				}
+			}
 			InstructionEnum::Function { name, args, scope_pointer } => {
 				let resolved_args = args.iter().map(|x| x.toResolved(scope_id, manager)).collect::<Vec<_>>();
 				manager.declare_function(scope_id, name.clone(), resolved_args, scope_pointer.clone());
 			}
 			InstructionEnum::CallFunction { name, args } => {
-				let function_scope = manager.get_function(scope_id, name.clone()).ok_or_else(|| 
-					FonksiyonBulunamadı {
-						src: src.clone(),
-						bad_bit: span,
-					}
-				)?;
+				let function_scope = manager.get_function(scope_id, name.clone()).ok_or_else(|| FonksiyonBulunamadı {
+					src: src.clone(),
+					bad_bit: span,
+				})?;
 				let resolved_args = args.iter().map(|x| x.evaluate(scope_id, manager)).collect::<Vec<_>>();
 				let funcdef_args = &function_scope.args;
 				if resolved_args.len() > funcdef_args.len() {
@@ -289,6 +310,7 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 		line_index += 1;
 		for chunk in line.split(";") {
 			let raw_line_feed = tokenize(chunk);
+			// println!("{raw_line_feed:#?}");
 			if !raw_line_feed.is_all_ok() {
 				continue;
 			}

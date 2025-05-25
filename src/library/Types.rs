@@ -204,6 +204,28 @@ impl Object {
 		}
 	}
 
+	pub fn expectToBePozitiveNumber(&self, src: NamedSource<String>, span: SourceSpan) -> Result<&Number, TipHatası> {
+		if let Object::Number(val) = self {
+			if val.value >= 0.0 {
+				Ok(val)
+			} else {
+				Err(TipHatası::expected(
+					"Verilen tipin bir pozitif sayı olması bekleniyordu.".to_string(),
+					format!("{:?}", self),
+					src,
+					span
+				))
+			}
+		} else {
+			Err(TipHatası::expected(
+				"Verilen tipin bir pozitif sayı olması bekleniyordu.".to_string(),
+				format!("{:?}", self),
+				src,
+				span
+			))
+		}
+	}
+
 	pub fn expectToBeText(&self, src: NamedSource<String>, span: SourceSpan) -> Result<&Text, TipHatası> {
 		if let Object::Text(val) = self {
 			Ok(val)

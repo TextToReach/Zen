@@ -10,6 +10,7 @@ use crate::{features::tokenizer::{InstructionEnum, TokenData}, library::Types::{
 pub enum ScopeAction {
 	RootScope,
 	Repeat(Expression),
+	For(Expression, Expression, Option<Expression>, String),
 	WhileTrue,
 	Condition(Expression),
 	Function { name: String, args: Vec<ParameterData> },
