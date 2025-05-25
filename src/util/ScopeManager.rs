@@ -120,6 +120,7 @@ pub struct Scope {
 	pub variables: HashMap<String, Object>,
 	pub functions: HashMap<String, Function>,
 	pub scope_type: ScopeType,
+	pub globals: HashMap<String, Object>,
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +149,7 @@ impl ScopeManager {
 			block: Vec::new(),
 			variables: HashMap::new(),
 			functions: HashMap::new(),
+			globals: HashMap::new(),
 			scope_type: Default,
 		};
 		
@@ -174,6 +176,7 @@ impl ScopeManager {
 			block: Vec::new(),
 			functions: HashMap::new(),
 			variables: HashMap::new(),
+			globals: HashMap::new(),
 			scope_type: Transparent { parent: parent_id },
 		};
 
@@ -198,6 +201,7 @@ impl ScopeManager {
 			block: Vec::new(),
 			functions: HashMap::new(),
 			variables: HashMap::new(),
+			globals: HashMap::new(),
 			scope_type: Isolated,
 		};
 
@@ -282,6 +286,12 @@ impl ScopeManager {
 		}
 	}
 
+	pub fn set_global(&mut self, scope_id: usize, name: String, value: Object) {
+		if let Some(scope) = self.scopes.get_mut(&scope_id) {
+			scope.globals.insert(name, value);
+		}
+	}
+
 	pub fn does_var_exists<T: AsRef<str>>(&self, scope_id: usize, name: T) -> bool {
 		let name = name.as_ref();
 		if let Some(_) = self.get_var_in_scope(scope_id, name) {
@@ -305,6 +315,9 @@ impl ScopeManager {
 			}
 			// Check if current scope is isolated; if so, stop searching
 			if let Some(scope) = self.get_scope(scope_id) {
+				if let Some(global_value) = self.get_scope(0).unwrap().globals.get(name) {
+					return Some(global_value.clone());
+				}
 				if scope.scope_type.is_isolated() {
 					break;
 				}

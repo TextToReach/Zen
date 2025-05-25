@@ -15,6 +15,32 @@ pub struct GirintiHatası {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[error("Değişken Bulunamadı")]
+#[diagnostic(
+    help("Bu değişkenin daha önceden tanımlanmış olduğundan emin olun.")
+)]
+pub struct DegiskenBulunamadı {
+    #[source_code]
+    pub src: NamedSource<String>,
+	
+    #[label("Hata buradan kaynaklandı.")]
+    pub bad_bit: SourceSpan,
+}
+
+#[derive(Error, Debug, Diagnostic)]
+#[error("Fonksiyon Bulunamadı")]
+#[diagnostic(
+    help("Bu fonksiyonun daha önceden tanımlanmış olduğundan emin olun.")
+)]
+pub struct FonksiyonBulunamadı {
+    #[source_code]
+    pub src: NamedSource<String>,
+	
+    #[label("Hata buradan kaynaklandı.")]
+    pub bad_bit: SourceSpan,
+}
+
+#[derive(Error, Debug, Diagnostic)]
 #[error("Tip Hatası")]
 pub struct TipHatası {
     #[source_code]

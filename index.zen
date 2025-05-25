@@ -1,5 +1,11 @@
-fonksiyon selamla(a: metin = "sa" + "as", b: sayı)
-	b kere tekrarla
-		yazdır a
+// Bir küp çiziyor!
 
-selamla("abi")
+ortabosluk = ekrangenisligi - 2
+fonksiyon kubyap(a: metin = "sa" + "as", b: sayı, ortabosluk: sayı)
+	yazdır a * ekrangenisligi
+	i = 10
+	b - 2 kere tekrarla
+		yazdır "*", " " * ortabosluk, "*"
+	yazdır a * ekrangenisligi
+
+kubyap("*", ekranyuksekligi - 3, ekrangenisligi - 4)

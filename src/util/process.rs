@@ -1,6 +1,7 @@
 use super::ScopeManager::{ConditionBlock, ConditionStructure, Scope};
 use crate::features::tokenizer::{AssignmentMethod, CheckTokenVec, ConditionBlockType, RemoveQuotes};
-use crate::library::Error::{CokFazlaArguman, EksikArguman, GirintiHatası};
+use crate::library::Error::{CokFazlaArguman, EksikArguman, FonksiyonBulunamadı, GirintiHatası};
+use crate::library::Types::Object;
 use crate::parsers::Parsers::Expression;
 use crate::{
 	DebugVec, Print, PrintVec,
@@ -77,7 +78,12 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				manager.declare_function(scope_id, name.clone(), resolved_args, scope_pointer.clone());
 			}
 			InstructionEnum::CallFunction { name, args } => {
-				let function_scope = manager.get_function(scope_id, name.clone()).unwrap();
+				let function_scope = manager.get_function(scope_id, name.clone()).ok_or_else(|| 
+					FonksiyonBulunamadı {
+						src: src.clone(),
+						bad_bit: span,
+					}
+				)?;
 				let resolved_args = args.iter().map(|x| x.evaluate(scope_id, manager)).collect::<Vec<_>>();
 				let funcdef_args = &function_scope.args;
 				if resolved_args.len() > funcdef_args.len() {
@@ -319,6 +325,14 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(1));
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(2));
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(3));
+
+	if let Some((w, h)) = term_size::dimensions() {
+		manager.set_global(root_scope, "ekrangenisligi".to_string(), Object::from(w as f64));
+		manager.set_global(root_scope, "ekranyuksekligi".to_string(), Object::from(h as f64));
+	} else {
+		manager.set_global(root_scope, "ekrangenisligi".to_string(), Object::from(0 as f64));
+		manager.set_global(root_scope, "ekranyuksekligi".to_string(), Object::from(0 as f64));
+	}
 
 	ExecuteBlock(
 		root_scope,
