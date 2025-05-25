@@ -24,6 +24,7 @@ pub enum BlockOutput {
 }
 
 pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput {
+	// println!("Running scope {scope_id}...");
 	let scope = manager.get_scope(scope_id).expect(format!("Scope {scope_id} does not exist.").as_str());
 	let block = scope.block.clone();
 	let mut result = BlockOutput::None;
@@ -69,6 +70,7 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput 
 				}
 			}
 			InstructionEnum::Function { name, args, scope_pointer } => {
+				println!("Declaring function: {} with args: {:?}", name, args);
 				manager.declare_function(scope_id, name.clone(), args.clone(), scope_pointer.clone());
 			}
 			InstructionEnum::CallFunction { name, args } => {
@@ -149,21 +151,29 @@ pub fn ProcessLine(
 	fileandline: (&str, u32)
 	// conditional_grup:
 ) -> miette::Result<()> {
-	let line_feed_tab_count = line_feed.count_from_start(|x| x.token == TokenTable::Tab);
-	let inferred_scope_depth = manager.get_depth(current_scope_id.clone());
-
-	if line_feed_tab_count != inferred_scope_depth {
-		if line_feed_tab_count > inferred_scope_depth && opts.strict {
+	let line_indent = line_feed.iter().take_while(|x| x.token == TokenTable::Tab).count();
+	let mut scope_depth = manager.get_depth(*current_scope_id);
+	// println!("{line_feed:#?}");
+	if line_indent < scope_depth {
+		while scope_depth > line_indent {
+			if let Some(parent) = manager.get_parent(*current_scope_id) {
+				*current_scope_id = parent;
+				scope_depth -= 1;
+			} else {
+		
+				break;
+			}
+		}
+	}
+	else if line_indent > scope_depth + 1 {
+		if opts.strict {
 			return Err(GirintiHatası {
 				src: NamedSource::new(fileandline.0, full_source).with_language("Zen"),
 				bad_bit: SourceSpan::new(
-					inferred_scope_depth.into(),
-					(line_feed_tab_count - inferred_scope_depth) as usize
+					scope_depth.into(),
+					(line_indent - scope_depth) as usize
 				)
 			})?;
-		} else {
-			let temp = current_scope_id.clone();
-			*current_scope_id = manager.get_parent(current_scope_id.clone()).unwrap();
 		}
 	}
 

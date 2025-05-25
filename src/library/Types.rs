@@ -68,9 +68,16 @@ impl From<(&Object, &Object)> for ObjectComparison {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ParameterData {
+	pub name: String,
+	pub data_type: Option<TokenData>,
+	pub default_value: Option<Object>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Function {
 	pub name: String,
-	pub args: Vec<TokenData>,
+	pub args: Vec<ParameterData>,
 	pub scope_pointer: usize,
 }
 

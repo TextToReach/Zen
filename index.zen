@@ -1,6 +1,4 @@
-fonksiyon selamla()
-	yazdır "merhaba"
-
-
-10 kere tekrarla
-	selamla()
+fonksiyon selamla(atin, c: metin)
+	10 kere tekrarla
+		yazdır "abc"
+selamla()

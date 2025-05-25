@@ -1,26 +1,26 @@
 #![allow(dead_code)]
 
+pub mod Break;
+pub mod Continue;
 pub mod Define;
 pub mod Elif;
 pub mod Else;
+pub mod Function;
+pub mod FunctionCall;
 pub mod If;
 pub mod Print;
 pub mod Repeat;
-pub mod Break;
-pub mod Continue;
 pub mod WhileTrue;
-pub mod Function;
-pub mod FunctionCall;
 
 pub mod Parsers {
-    use super::{Break, Continue, Define, Elif, Else, Function, FunctionCall, If, Print, Repeat, WhileTrue};
-    use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable};
-    use crate::library::Types::Object;
-    use crate::util::ScopeManager::ScopeManager;
-    use chumsky::prelude::*;
-    use num::pow::Pow;
-    use std::fmt::Display;
-    use std::rc::Rc;
+	use super::{Break, Continue, Define, Elif, Else, Function, FunctionCall, If, Print, Repeat, WhileTrue};
+	use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable};
+	use crate::library::Types::{Object, ParameterData};
+	use crate::util::ScopeManager::ScopeManager;
+	use chumsky::prelude::*;
+	use num::pow::Pow;
+	use std::fmt::Display;
+	use std::rc::Rc;
 
 	type ParserType1 = Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>>;
 	type ParserType2 = Box<dyn Parser<TokenData, (ParserOutput, InstructionEnum), Error = Simple<TokenData>>>;
@@ -85,7 +85,7 @@ pub mod Parsers {
 		pub fn falsy() -> Self {
 			Self::Value(Box::new(false.into()))
 		}
-		
+
 		pub fn evaluate(&self, currentScope: usize, manager: &mut ScopeManager) -> Object {
 			match self {
 				Expression::Value(val) => {
@@ -257,5 +257,26 @@ pub mod Parsers {
 
 	pub fn identifier() -> Box<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>> {
 		Box::new(filter(|x: &TokenData| x.token == TokenTable::Identifier))
+	}
+
+	pub fn main_types() -> Box<dyn Parser<TokenData, TokenData, Error = Simple<TokenData>>> {
+		Box::new(
+			just(TokenTable::KeywordMetin.asTokenData())
+				.or(just(TokenTable::KeywordSayı.asTokenData()))
+				.or(just(TokenTable::KeywordMantıksal.asTokenData())),
+		)
+	}
+
+	pub fn parameter() -> Box<dyn Parser<TokenData, ParameterData, Error = Simple<TokenData>>> {
+		Box::new(
+			identifier()
+				.then_ignore(just(TokenTable::Colon.asTokenData()))
+				.then(main_types()) // TODO: Remove this and add support for object and such. For now this only supports the main types.
+				.map(|(name, type_)| ParameterData {
+					name: name.asIdentifier(),
+					data_type: Some(type_),
+					default_value: None,
+				}),
+		)
 	}
 }

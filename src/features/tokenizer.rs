@@ -4,7 +4,7 @@ use std::{
 	default, fmt::{write, Debug, Display}, ops::{Not, Range}
 };
 
-use crate::{library::Types::Object, parsers::Parsers::Expression, util::ScopeManager::{ConditionBlock, ScopeAction}};
+use crate::{library::Types::{Object, ParameterData}, parsers::Parsers::Expression, util::ScopeManager::{ConditionBlock, ScopeAction}};
 use logos::Logos;
 
 #[derive(Clone, Logos, Debug, PartialEq, PartialOrd, Hash, Eq)]
@@ -23,6 +23,13 @@ pub enum TokenTable {
 	KeywordDeğilseVe,
 	#[token("değilse")]
 	KeywordDeğilse,
+
+	#[token("sayı")]
+	KeywordSayı,
+	#[token("metin")]
+	KeywordMetin,
+	#[token("mantıksal")]
+	KeywordMantıksal,
 
 	#[token("ve")]
 	KeywordVe,
@@ -83,6 +90,8 @@ pub enum TokenTable {
 	LPAREN,
 	#[token("()")]
 	EmptyParens,
+	#[token(":")]
+	Colon,
 
 	#[token("[")]
 	RSQBRACKET,
@@ -130,56 +139,7 @@ impl TokenTable {
 
 impl Display for TokenTable {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			TokenTable::Tab => write!(f, "\t"),
-			TokenTable::Comment => write!(f, "Comment"),
-			TokenTable::KeywordEğer => write!(f, "KeywordEğer"),
-			TokenTable::Keywordİse => write!(f, "Keywordİse"),
-			TokenTable::KeywordDeğilseVe => write!(f, "KeywordDeğilseVe"),
-			TokenTable::KeywordDeğilse => write!(f, "KeywordDeğilse"),
-			TokenTable::KeywordVe => write!(f, "KeywordVe"),
-			TokenTable::KeywordVeya => write!(f, "KeywordVeya"),
-			TokenTable::KeywordYazdır => write!(f, "KeywordYazdır"),
-			TokenTable::KeywordSürekliTekrarla => write!(f, "KeywordSürekliTekrarla"),
-			TokenTable::KeywordNDefaTekrarla => write!(f, "KeywordNDefaTekrarla"),
-			TokenTable::KeywordFonksiyon => write!(f, "KeywordFonksiyon"),
-			TokenTable::KeywordDurdur => write!(f, "KeywordDurdur"),
-			TokenTable::KeywordDevamEt => write!(f, "KeywordDevamEt"),
-			TokenTable::MathOperatorAdd => write!(f, "OperatorAdd"),
-			TokenTable::MathOperatorSubtract => write!(f, "OperatorSubtract"),
-			TokenTable::MathOperatorMultiply => write!(f, "OperatorMultiply"),
-			TokenTable::MathOperatorDivide => write!(f, "OperatorDivide"),
-			TokenTable::MathOperatorMod => write!(f, "OperatorMod"),
-			TokenTable::RPAREN => write!(f, "RPAREN"),
-			TokenTable::LPAREN => write!(f, "LPAREN"),
-			TokenTable::EmptyParens => write!(f, "EmptyParens"),
-			TokenTable::RSQBRACKET => write!(f, "RSQBRACKET"),
-			TokenTable::LSQBRACKET => write!(f, "LSQBRACKET"),
-			TokenTable::EmptySqBrackets => write!(f, "EmptySqBrackets"),
-			TokenTable::RCRBRACKET => write!(f, "RCRBRACKET"),
-			TokenTable::LCRBRACKET => write!(f, "LCRBRACKET"),
-			TokenTable::EmptyCrBrackets => write!(f, "EmptyCrBrackets"),
-			TokenTable::Semicolon => write!(f, "Semicolon"),
-			TokenTable::Comma => write!(f, "Comma"),
-			TokenTable::Dot => write!(f, "Dot"),
-			TokenTable::BooleanLiteral => write!(f, "BooleanLiteral"),
-			TokenTable::StringLiteral => write!(f, "StringLiteral"),
-			TokenTable::NumberLiteral => write!(f, "NumberLiteral"),
-			TokenTable::NegativeNumberLiteral => write!(f, "NegativeNumberLiteral"),
-			TokenTable::Identifier => write!(f, "Identifier"),
-			TokenTable::ComparisonOperatorEqual => write!(f, "ComparisonOperatorEqual"),
-			TokenTable::ComparisonOperatorNotEqual => write!(f, "ComparisonOperatorNotEqual"),
-			TokenTable::ComparisonOperatorLessThan => write!(f, "ComparisonOperatorLessThan"),
-			TokenTable::ComparisonOperatorGreaterThan => write!(f, "ComparisonOperatorGreaterThan"),
-			TokenTable::ComparisonOperatorLessThanOrEqual => write!(f, "ComparisonOperatorLessThanOrEqual"),
-			TokenTable::ComparisonOperatorGreaterThanOrEqual => write!(f, "ComparisonOperatorGreaterThanOrEqual"),
-			TokenTable::AssignmentOperatorSet => write!(f, "AssignmentOperatorSet"),
-			TokenTable::AssignmentOperatorAdd => write!(f, "AssignmentOperatorAdd"),
-			TokenTable::AssignmentOperatorSubtract => write!(f, "AssignmentOperatorSubtract"),
-			TokenTable::AssignmentOperatorMultiply => write!(f, "AssignmentOperatorMultiply"),
-			TokenTable::AssignmentOperatorDivide => write!(f, "AssignmentOperatorDivide"),
-			TokenTable::Error => write!(f, "Error"),
-		}
+		write!(f, "{:?}", self)
 	}
 }
 
@@ -355,7 +315,7 @@ pub enum InstructionEnum {
 	ElifBlock { scope_pointer: usize, condition: Expression },
 	ElseBlock { scope_pointer: usize },
 	Condition(ConditionBlock),
-	Function { name: String, args: Vec<TokenData>, scope_pointer: usize },
+	Function { name: String, args: Vec<ParameterData>, scope_pointer: usize },
 	// BLOCKS
 
 	CallFunction { name: String, args: Vec<Expression> },
