@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
-	default, fmt::{write, Debug, Display}, ops::{Not, Range}
+	default, fmt::{write, Debug, Display}, ops::{Neg, Not, Range}
 };
 
 use crate::{library::Types::{Object, ParameterData}, parsers::Parsers::Expression, util::ScopeManager::{ConditionBlock, ScopeAction}};
@@ -118,9 +118,6 @@ pub enum TokenTable {
 	StringLiteral,
 	#[regex(r"(0|[1-9][0-9]*)(\.[0-9]+)?")]
 	NumberLiteral,
-	#[regex(r"-(0|[1-9][0-9]*)(\.[0-9]+)?")]
-	NegativeNumberLiteral,
-
 	#[regex(r"[abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ_][abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ0-9_]*")]
 	Identifier,
 
@@ -187,9 +184,12 @@ impl TokenData {
 		
 	}
 
-	pub fn asNumberLiteral(&self) -> f64 {
+	pub fn asNumberLiteral(&self, isNegative: bool) -> f64 {
 		match self.token {
-			TokenTable::NumberLiteral | TokenTable::NegativeNumberLiteral => self.slice.parse::<f64>().unwrap_or(0.0), // TODO: Replace all unwrap_or statements with proper errors.
+			TokenTable::NumberLiteral => {
+				let num = self.slice.parse::<f64>().unwrap_or(0.0); // TODO: Replace all unwrap_or statements with proper errors.
+				if isNegative { -num } else { num }
+			},
 			_ => 0.0,
 		}
 	}
@@ -222,8 +222,7 @@ impl TokenData {
 	pub fn asObject(&self) -> Object {
 		match self.token {
 			TokenTable::StringLiteral => Object::from(self.asStringLiteral()),
-			TokenTable::NumberLiteral => Object::from(self.asNumberLiteral()),
-			TokenTable::NegativeNumberLiteral => Object::from(self.asNumberLiteral()),
+			TokenTable::NumberLiteral => Object::from(self.asNumberLiteral(false)),
 			TokenTable::BooleanLiteral => Object::from(self.asBooleanLiteral()),
 			TokenTable::Identifier => Object::Variable(self.slice.clone()),
 			_ => panic!("Unsupported token type for conversion to Object."),

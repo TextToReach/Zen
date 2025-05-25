@@ -171,7 +171,6 @@ pub mod Parsers {
 			filter(|x: &TokenData| {
 				x.token == TokenTable::StringLiteral
 					|| x.token == TokenTable::NumberLiteral
-					|| x.token == TokenTable::NegativeNumberLiteral
 					|| x.token == TokenTable::BooleanLiteral
 					|| x.token == TokenTable::Identifier
 			})
@@ -184,7 +183,13 @@ pub mod Parsers {
 		let (paren_left, paren_right) = parens();
 
 		let expr = recursive(|expr| {
-			let atom = Rc::new(object().or(expr.delimited_by(paren_left, paren_right)));
+			let atom = Rc::new(
+				just(TokenTable::MathOperatorSubtract.asTokenData())
+					.then(object())
+					.map(|(_, obj)| Expression::Sub(Box::new(Expression::Value(Box::new(0f64.into()))), Box::new(obj)))
+					.or(object())
+					.or(expr.delimited_by(paren_left, paren_right))
+			);
 
 			let mul_operator = just(TokenTable::MathOperatorMultiply.asTokenData())
 				.or(just(TokenTable::MathOperatorDivide.asTokenData()))

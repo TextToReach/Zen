@@ -294,7 +294,7 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 			}
 			let line_feed_without_tabs = raw_line_feed.iter().filter(|x| x.token != TokenTable::Tab).cloned().collect::<Vec<_>>();
 
-			if !line_feed_without_tabs.starts_with(&[TokenTable::Comment.asTokenData()]) {
+			if !line_feed_without_tabs.starts_with(&[TokenTable::Comment.asTokenData()]) && !line_feed_without_tabs.is_empty() {
 				match Parsers::parser().parse(line_feed_without_tabs.clone()) {
 					Ok(res) => {
 						match ProcessLine(
