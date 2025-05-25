@@ -6,8 +6,7 @@ use crate::{
 use chumsky::prelude::*;
 
 pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>> {
-	let out = Parsers::number()
-		.then_ignore(just(TokenTable::KeywordNDefaTekrarla.asTokenData())) 
+	let out = just(TokenTable::KeywordSürekliTekrarla.asTokenData())
 		.map(|a| InstructionEnum::WhileTrue { scope_pointer: 0 });
 
 	return Box::new(out);

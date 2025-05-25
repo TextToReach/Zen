@@ -61,6 +61,18 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 					}
 				}
 			}
+			InstructionEnum::WhileTrue { scope_pointer } => {
+				loop {
+					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
+						Ok(BlockOutput::Break) => break,
+						Ok(BlockOutput::Continue) => continue,
+						Ok(BlockOutput::None) => {}
+						Err(e) => {
+							return Err(e);
+						}
+					}
+				}
+			}
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => {
 				for _ in 0..(repeat_count.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64 {
 					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
@@ -343,10 +355,10 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 		}
 	}
 
-	// println!("{:#?}\n-----------------------------------", manager.get_scope(0));
-	// println!("{:#?}\n-----------------------------------", manager.get_scope(1));
-	// println!("{:#?}\n-----------------------------------", manager.get_scope(2));
-	// println!("{:#?}\n-----------------------------------", manager.get_scope(3));
+	println!("{:#?}\n-----------------------------------", manager.get_scope(0));
+	println!("{:#?}\n-----------------------------------", manager.get_scope(1));
+	println!("{:#?}\n-----------------------------------", manager.get_scope(2));
+	println!("{:#?}\n-----------------------------------", manager.get_scope(3));
 
 	if let Some((w, h)) = term_size::dimensions() {
 		manager.set_global(root_scope, "ekrangenişliği".to_string(), Object::from(w as f64));
