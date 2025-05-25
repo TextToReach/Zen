@@ -4,12 +4,12 @@ use std::{
 	thread::scope,
 };
 
-use crate::{features::tokenizer::{InstructionEnum, TokenData}, library::Types::{Boolean, Function, Object, ParameterData}, parsers::Parsers::Expression};
+use crate::{features::tokenizer::{InstructionEnum, TokenData}, library::Types::{Boolean, Function, Object, ParameterData, ResolvedParameterData}, parsers::Parsers::Expression};
 
 #[derive(Debug, Clone)]
 pub enum ScopeAction {
 	RootScope,
-	Repeat(f64),
+	Repeat(Expression),
 	WhileTrue,
 	Condition(Expression),
 	Function { name: String, args: Vec<ParameterData> },
@@ -340,7 +340,7 @@ impl ScopeManager {
 		depth
 	}
 
-	pub fn declare_function(&mut self, scope_id: usize, name: String, args: Vec<ParameterData>, scope_pointer: usize) {
+	pub fn declare_function(&mut self, scope_id: usize, name: String, args: Vec<ResolvedParameterData>, scope_pointer: usize) {
 		let function_obj = Function {
 			name: name.clone(),
 			args: args.clone(),

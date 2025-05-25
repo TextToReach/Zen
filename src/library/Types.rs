@@ -5,6 +5,7 @@ use chumsky::prelude::*;
 use chumsky::text::whitespace;
 use chumsky::{Parser, error::Simple};
 use colored::Colorize;
+use miette::{NamedSource, SourceSpan};
 use num::pow::Pow;
 
 use crate::features::tokenizer::{TokenData, TokenTable};
@@ -16,6 +17,8 @@ use std::cell::RefCell;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::rc::Rc;
 use std::{fmt::Display, num::ParseFloatError, str::FromStr};
+
+use super::Error::TipHatası;
 
 /// Exact eq's:
 /// - Number = f64
@@ -71,14 +74,59 @@ impl From<(&Object, &Object)> for ObjectComparison {
 pub struct ParameterData {
 	pub name: String,
 	pub data_type: Option<TokenData>,
+	pub default_value: Option<Expression>,
+}
+
+/// This type just says that the ParameterData is resolved and evaluated and is ready to be used inside the default_value attribute.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedParameterData {
+	pub name: String,
+	pub data_type: Option<ObjectType>,
 	pub default_value: Option<Object>,
+}
+
+impl ParameterData {
+	pub fn toResolved(&self, currentScope: usize, manager: &mut ScopeManager) -> ResolvedParameterData {
+		ResolvedParameterData {
+			name: self.name.clone(),
+			data_type: self.data_type.clone().map(|token| match token.token {
+				TokenTable::KeywordSayı => ObjectType::Number,
+				TokenTable::KeywordMetin => ObjectType::Text,
+				TokenTable::KeywordMantıksal => ObjectType::Boolean,
+				_ => panic!("Unsupported TokenData variant for conversion to ObjectType: {:?}", token),
+			}),
+			default_value: self.default_value.clone().map(|expr| expr.evaluate(currentScope, manager)),
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
 	pub name: String,
-	pub args: Vec<ParameterData>,
+	pub args: Vec<ResolvedParameterData>,
 	pub scope_pointer: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjectType {
+	Number,
+	Text,
+	Boolean,
+	Variable,
+	Null,
+}
+
+impl Display for ObjectType {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let type_str = match self {
+			ObjectType::Number => "Sayı",
+			ObjectType::Text => "Metin",
+			ObjectType::Boolean => "Mantıksal",
+			ObjectType::Variable => "Değişken",
+			ObjectType::Null => "NIL",
+		};
+		write!(f, "{}", type_str)
+	}
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,6 +139,16 @@ pub enum Object {
 }
 
 impl Object {
+	pub fn get_type(&self) -> ObjectType {
+		match self {
+			Object::Number(_) => ObjectType::Number,
+			Object::Text(_) => ObjectType::Text,
+			Object::Bool(_) => ObjectType::Boolean,
+			Object::Variable(_) => ObjectType::Variable,
+			Object::Null => ObjectType::Null,
+		}
+	}
+
 	pub fn asNumber(self) -> Number {
 		if let Object::Number(val) = self {
 			val
@@ -130,6 +188,61 @@ impl Object {
 			Object::Text(val) => !val.value.is_empty(),
 			Object::Variable(_) => true,
 			Object::Null => false,
+		}
+	}
+
+	pub fn expectToBeNumber(&self, src: NamedSource<String>, span: SourceSpan) -> Result<&Number, TipHatası> {
+		if let Object::Number(val) = self {
+			Ok(val)
+		} else {
+			Err(TipHatası::expected(
+				"Verilen tipin bir sayı olması bekleniyordu.".to_string(),
+				format!("{:?}", self),
+				src,
+				span
+			))
+		}
+	}
+
+	pub fn expectToBeText(&self, src: NamedSource<String>, span: SourceSpan) -> Result<&Text, TipHatası> {
+		if let Object::Text(val) = self {
+			Ok(val)
+		} else {
+			Err(TipHatası::expected(
+				"Verilen tipin bir metin olması bekleniyordu.".to_string(),
+				format!("{:?}", self),
+				src,
+				span
+			))
+		}
+	}
+
+	pub fn expectToBeBool(&self, src: NamedSource<String>, span: SourceSpan) -> Result<&Boolean, TipHatası> {
+		if let Object::Bool(val) = self {
+			Ok(val)
+		} else {
+			Err(TipHatası::expected(
+				"Verilen tipin br mantıksal olması bekleniyordu.".to_string(),
+				format!("{:?}", self),
+				src,
+				span
+			))
+		}
+	}
+
+	pub fn expectToBe(&self, expected: ObjectType, src: NamedSource<String>, span: SourceSpan) -> Result<(), TipHatası> {
+		match (self, expected.clone()) {
+			(Object::Number(_), ObjectType::Number) => Ok(()),
+			(Object::Text(_), ObjectType::Text) => Ok(()),
+			(Object::Bool(_), ObjectType::Boolean) => Ok(()),
+			(Object::Variable(_), ObjectType::Variable) => Ok(()),
+			(Object::Null, ObjectType::Null) => Ok(()),
+			_ => Err(TipHatası::expected(
+				format!("Verilen tipin bir {} olması bekleniyordu.", expected),
+				format!("{:?}", self),
+				src,
+				span,
+			)),
 		}
 	}
 }

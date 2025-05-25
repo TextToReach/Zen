@@ -1,4 +1,5 @@
-fonksiyon selamla(atin, c: metin)
-	10 kere tekrarla
-		yazdır "abc"
-selamla()
+fonksiyon selamla(a: metin = "sa" + "as", b: sayı)
+	b kere tekrarla
+		yazdır a
+
+selamla("abi")

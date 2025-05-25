@@ -272,10 +272,15 @@ pub mod Parsers {
 			identifier()
 				.then_ignore(just(TokenTable::Colon.asTokenData()))
 				.then(main_types()) // TODO: Remove this and add support for object and such. For now this only supports the main types.
-				.map(|(name, type_)| ParameterData {
+				.then(
+					just(TokenTable::AssignmentOperatorSet.asTokenData())
+					.ignore_then(expression())
+					.or_not()
+				)
+				.map(|((name, type_), default)| ParameterData {
 					name: name.asIdentifier(),
 					data_type: Some(type_),
-					default_value: None,
+					default_value: default,
 				}),
 		)
 	}

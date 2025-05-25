@@ -85,11 +85,9 @@ pub enum TokenTable {
 	AssignmentOperatorDivide,
 
 	#[token("(")]
-	RPAREN,
-	#[token(")")]
 	LPAREN,
-	#[token("()")]
-	EmptyParens,
+	#[token(")")]
+	RPAREN,
 	#[token(":")]
 	Colon,
 
@@ -309,7 +307,7 @@ pub enum InstructionEnum {
 	Input(Vec<TokenData>),
 	
 	// BLOCKS
-	Repeat 		{ scope_pointer: usize, repeat_count: f64 },
+	Repeat 		{ scope_pointer: usize, repeat_count: Expression },
 	WhileTrue 	{ scope_pointer: usize },
 	IfBlock { scope_pointer: usize, condition: Expression },
 	ElifBlock { scope_pointer: usize, condition: Expression },
@@ -341,7 +339,7 @@ impl InstructionEnum {
 			InstructionEnum::ElifBlock { condition, ..} => ScopeAction::Condition( condition.clone() ),
 			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition( Expression::truthy() ),
 			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
-			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(*repeat_count),
+			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(repeat_count.clone()),
 			InstructionEnum::Function { name, args, scope_pointer } => ScopeAction::Function { name: name.clone(), args: args.clone() },
 			_ => panic!()
 		}

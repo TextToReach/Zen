@@ -1,6 +1,6 @@
 use super::ScopeManager::{ConditionBlock, ConditionStructure, Scope};
 use crate::features::tokenizer::{AssignmentMethod, CheckTokenVec, ConditionBlockType, RemoveQuotes};
-use crate::library::Error::GirintiHatası;
+use crate::library::Error::{CokFazlaArguman, EksikArguman, GirintiHatası};
 use crate::parsers::Parsers::Expression;
 use crate::{
 	DebugVec, Print, PrintVec,
@@ -23,7 +23,7 @@ pub enum BlockOutput {
 	None,
 }
 
-pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput {
+pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSource<String>, span: SourceSpan) -> miette::Result<BlockOutput> {
 	// println!("Running scope {scope_id}...");
 	let scope = manager.get_scope(scope_id).expect(format!("Scope {scope_id} does not exist.").as_str());
 	let block = scope.block.clone();
@@ -61,20 +61,54 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput 
 				}
 			}
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => {
-				for _ in 0..repeat_count.floor() as i64 {
-					match ExecuteBlock(scope_pointer, manager) {
-						BlockOutput::Break => break,
-						BlockOutput::Continue => continue,
-						BlockOutput::None => {}
+				for _ in 0..(repeat_count.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64 {
+					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
+						Ok(BlockOutput::Break) => break,
+						Ok(BlockOutput::Continue) => continue,
+						Ok(BlockOutput::None) => {}
+						Err(e) => {
+							return Err(e);
+						}
 					}
 				}
 			}
 			InstructionEnum::Function { name, args, scope_pointer } => {
-				println!("Declaring function: {} with args: {:?}", name, args);
-				manager.declare_function(scope_id, name.clone(), args.clone(), scope_pointer.clone());
+				let resolved_args = args.iter().map(|x| x.toResolved(scope_id, manager)).collect::<Vec<_>>();
+				manager.declare_function(scope_id, name.clone(), resolved_args, scope_pointer.clone());
 			}
 			InstructionEnum::CallFunction { name, args } => {
-				ExecuteBlock(manager.get_function(scope_id, name.clone()).unwrap().scope_pointer, manager);
+				let function_scope = manager.get_function(scope_id, name.clone()).unwrap();
+				let resolved_args = args.iter().map(|x| x.evaluate(scope_id, manager)).collect::<Vec<_>>();
+				let funcdef_args = &function_scope.args;
+				if resolved_args.len() > funcdef_args.len() {
+					return Err(CokFazlaArguman {
+						src,
+						bad_bit: span,
+						expected: Some(funcdef_args.len()),
+						got: Some(resolved_args.len()),
+					})?;
+				}
+				for (i, param) in funcdef_args.iter().enumerate() {
+					let value = if i < resolved_args.len() {
+						resolved_args[i].clone()
+					} else if let Some(default) = &param.default_value {
+						default.clone()
+					} else {
+						return Err(EksikArguman {
+							src,
+							bad_bit: span,
+							expected: Some(param.name.clone()),
+						})?;
+					};
+
+					// Type checking
+					if let Some(expected_type) = &param.data_type {
+						value.expectToBe(expected_type.clone(), src.clone(), span)?
+					}
+
+					manager.set_var(function_scope.scope_pointer, param.name.clone(), value);
+				}
+				ExecuteBlock(function_scope.scope_pointer, manager, src.clone(), span)?;
 			}
 			InstructionEnum::Break => {
 				result = BlockOutput::Break;
@@ -87,32 +121,38 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput 
 			InstructionEnum::Condition(condition) => {
 				// Evaluate the main condition
 				if condition.If.condition.isTruthy(scope_id, manager) {
-					match ExecuteBlock(condition.If.scope_pointer, manager) {
-						BlockOutput::Break => {
+					match ExecuteBlock(condition.If.scope_pointer, manager, src.clone(), span) {
+						Ok(BlockOutput::Break) => {
 							result = BlockOutput::Break;
 							break;
 						}
-						BlockOutput::Continue => {
+						Ok(BlockOutput::Continue) => {
 							result = BlockOutput::Continue;
 							break;
 						}
-						BlockOutput::None => {}
+						Ok(BlockOutput::None) => {}
+						Err(e) => {
+							return Err(e);
+						}
 					}
 				} else {
 					// Check elifs
 					let mut executed = false;
 					for elif in &condition.Elif {
 						if elif.condition.isTruthy(scope_id, manager) {
-							match ExecuteBlock(elif.scope_pointer, manager) {
-								BlockOutput::Break => {
+							match ExecuteBlock(elif.scope_pointer, manager, src.clone(), span) {
+								Ok(BlockOutput::Break) => {
 									result = BlockOutput::Break;
 									break;
 								}
-								BlockOutput::Continue => {
+								Ok(BlockOutput::Continue) => {
 									result = BlockOutput::Continue;
 									break;
 								}
-								BlockOutput::None => {}
+								Ok(BlockOutput::None) => {}
+								Err(e) => {
+									return Err(e);
+								}
 							}
 							executed = true;
 							break;
@@ -120,16 +160,19 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput 
 					}
 					// Else block
 					if !executed {
-						match ExecuteBlock(condition.Else.scope_pointer, manager) {
-							BlockOutput::Break => {
+						match ExecuteBlock(condition.Else.scope_pointer, manager, src.clone(), span) {
+							Ok(BlockOutput::Break) => {
 								result = BlockOutput::Break;
 								break;
 							}
-							BlockOutput::Continue => {
+							Ok(BlockOutput::Continue) => {
 								result = BlockOutput::Continue;
 								break;
 							}
-							BlockOutput::None => {}
+							Ok(BlockOutput::None) => {}
+							Err(e) => {
+								return Err(e);
+							}
 						}
 					}
 				}
@@ -137,7 +180,7 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager) -> BlockOutput 
 			_ => todo!(),
 		}
 	}
-	result
+	Ok(result)
 }
 
 pub fn ProcessLine(
@@ -148,31 +191,24 @@ pub fn ProcessLine(
 	current_scope_id: &mut usize,
 	manager: &mut ScopeManager,
 	opts: &Runopts,
-	fileandline: (&str, u32)
-	// conditional_grup:
+	fileandline: (&str, u32), // conditional_grup:
 ) -> miette::Result<()> {
 	let line_indent = line_feed.iter().take_while(|x| x.token == TokenTable::Tab).count();
 	let mut scope_depth = manager.get_depth(*current_scope_id);
-	// println!("{line_feed:#?}");
 	if line_indent < scope_depth {
 		while scope_depth > line_indent {
 			if let Some(parent) = manager.get_parent(*current_scope_id) {
 				*current_scope_id = parent;
 				scope_depth -= 1;
 			} else {
-		
 				break;
 			}
 		}
-	}
-	else if line_indent > scope_depth + 1 {
+	} else if line_indent > scope_depth + 1 {
 		if opts.strict {
 			return Err(GirintiHatası {
 				src: NamedSource::new(fileandline.0, full_source).with_language("Zen"),
-				bad_bit: SourceSpan::new(
-					scope_depth.into(),
-					(line_indent - scope_depth) as usize
-				)
+				bad_bit: SourceSpan::new(scope_depth.into(), (line_indent - scope_depth) as usize),
 			})?;
 		}
 	}
@@ -189,18 +225,20 @@ pub fn ProcessLine(
 
 		match instr_enum {
 			InstructionEnum::IfBlock { .. } => {
-				instr_enum = InstructionEnum::Condition(
-					ConditionBlock::new(ConditionStructure { scope_pointer: new_scope, condition: instr_enum.as_expression() })
-				);
+				instr_enum = InstructionEnum::Condition(ConditionBlock::new(ConditionStructure {
+					scope_pointer: new_scope,
+					condition: instr_enum.as_expression(),
+				}));
 				manager.push_code_to_scope(*current_scope_id, &instr_enum);
 				*current_scope_id = new_scope;
 			}
 			InstructionEnum::ElifBlock { .. } => {
 				if let Some(last_instr) = manager.get_scope_mut(*current_scope_id).unwrap().block.last_mut() {
 					if let InstructionEnum::Condition(con) = last_instr {
-						con.push_elif(
-							ConditionStructure { scope_pointer: new_scope, condition: instr_enum.as_expression() }
-						);
+						con.push_elif(ConditionStructure {
+							scope_pointer: new_scope,
+							condition: instr_enum.as_expression(),
+						});
 					}
 				}
 				*current_scope_id = new_scope;
@@ -208,21 +246,20 @@ pub fn ProcessLine(
 			InstructionEnum::ElseBlock { .. } => {
 				if let Some(last_instr) = manager.get_scope_mut(*current_scope_id).unwrap().block.last_mut() {
 					if let InstructionEnum::Condition(con) = last_instr {
-						con.push_else(
-							ConditionStructure { scope_pointer: new_scope, condition: instr_enum.as_expression() }
-						);
+						con.push_else(ConditionStructure {
+							scope_pointer: new_scope,
+							condition: instr_enum.as_expression(),
+						});
 					}
 				}
 				*current_scope_id = new_scope;
-				
 			}
-			_ => {				
+			_ => {
 				instr_enum.set_block_pointer(new_scope);
 				manager.push_code_to_scope(*current_scope_id, &instr_enum);
 				*current_scope_id = new_scope;
 			}
 		}
-
 	} else {
 		manager.push_code_to_scope(*current_scope_id, &instr.1);
 	}
@@ -230,17 +267,17 @@ pub fn ProcessLine(
 	Ok(())
 }
 
-pub struct Runopts { verbose: bool, strict:bool }
+pub struct Runopts {
+	verbose: bool,
+	strict: bool,
+}
 
 pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict: bool, filename: &str) -> miette::Result<()> {
 	let mut manager = ScopeManager::new();
 	let root_scope = manager.create_scope(None, None);
 	let mut currentScope = root_scope;
 	let mut line_index = 0;
-	let opts = Runopts {
-		verbose,
-		strict
-	};
+	let opts = Runopts { verbose, strict };
 
 	for line in input.iter_mut() {
 		line_index += 1;
@@ -254,7 +291,16 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 			if !line_feed_without_tabs.starts_with(&[TokenTable::Comment.asTokenData()]) {
 				match Parsers::parser().parse(line_feed_without_tabs.clone()) {
 					Ok(res) => {
-						match ProcessLine(chunk.to_owned(), full_source.clone(), raw_line_feed, res.clone(), &mut currentScope, &mut manager, &opts, (filename, line_index)) {
+						match ProcessLine(
+							chunk.to_owned(),
+							full_source.clone(),
+							raw_line_feed,
+							res.clone(),
+							&mut currentScope,
+							&mut manager,
+							&opts,
+							(filename, line_index),
+						) {
 							Err(e) => {
 								return Err(e);
 							}
@@ -269,12 +315,16 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 		}
 	}
 
-	
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(0));
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(1));
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(2));
 	// println!("{:#?}\n-----------------------------------", manager.get_scope(3));
-	
-	ExecuteBlock(root_scope, &mut manager);
+
+	ExecuteBlock(
+		root_scope,
+		&mut manager,
+		NamedSource::new(filename, full_source.clone()),
+		SourceSpan::new(0.into(), full_source.len()),
+	)?;
 	Ok(())
 }
