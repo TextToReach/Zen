@@ -1,0 +1,1 @@
+cloc --include-lang=Rust --csv --quiet . | awk -F, '/Rust/ {print $5}'

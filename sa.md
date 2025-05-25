@@ -21,7 +21,7 @@ Projeye katkı sağlamak için [katkı rehberimize](CONTRIBUTING.md) göz atın 
 
 ## 📝 İstatistikler
 
-- Bu projede tam olarak {{ RUST_LINES }} satır [Rust](https://www.rust-lang.org/) kodu bulunuyor.
+- Bu projede tam olarak 2426 satır [Rust](https://www.rust-lang.org/) kodu bulunuyor.
 - ...
 
 ## 📢 Bize Katılın

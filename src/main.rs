@@ -5,6 +5,7 @@ mod library;
 mod parsers;
 mod test;
 mod util;
+mod stats;
 
 use std::{
 	cell::RefCell,
@@ -23,7 +24,7 @@ use library::{
 	Methods::Throw,
 	Types::{Severity, ZenError},
 };
-use test::test::run_tests;
+use test::run_tests;
 use util::process;
 
 /// Ana CLI aracı
@@ -61,6 +62,11 @@ enum Commands {
 	},
 
 	Test,
+
+	Stats {
+		#[arg(long, default_value_t = false)]
+		write: bool
+	},
 }
 
 fn run_zen_file(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool, noexecute: bool, strict: bool) -> miette::Result<()> {
@@ -99,6 +105,32 @@ fn main() -> miette::Result<()> {
 		}
 		Commands::Test => {
 			run_tests();
+		}
+		Commands::Stats { write } => {
+			let readme_path = "README.md";
+			let readme_content = match std::fs::read_to_string(readme_path) {
+				Ok(content) => content,
+				Err(err) => {
+					eprintln!("README.md okunamadı: {}", err);
+					return Ok(());
+				}
+			};
+			let stats = stats::stats(readme_content);
+			if write {
+				let mut file = match std::fs::File::create(readme_path) {
+					Ok(file) => file,
+					Err(err) => {
+						eprintln!("README.md dosyası oluşturulamadı: {}", err);
+						return Ok(());
+					}
+				};
+				use std::io::Write;
+				match file.write_all(stats.as_bytes()) {
+					Ok(_) => println!("README.md başarıyla güncellendi."),
+					Err(err) => eprintln!("README.md dosyası yazılırken hata oluştu: {}", err),
+				};
+			}
+			println!("{}", stats);
 		}
 	}
 	Ok(())
