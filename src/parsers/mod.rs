@@ -194,6 +194,7 @@ pub mod Parsers {
 			);
 
 			let mul_operator = just(TokenTable::MathOperatorMultiply.asTokenData())
+				.or(just(TokenTable::MathOperatorPower.asTokenData()))
 				.or(just(TokenTable::MathOperatorDivide.asTokenData()))
 				.or(just(TokenTable::MathOperatorMod.asTokenData()));
 

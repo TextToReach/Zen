@@ -39,6 +39,8 @@ pub enum TokenTable {
 	Keywordİle,
 	#[token("aralığında")]
 	KeywordAralığında,
+	#[token("arasında")]
+	KeywordArasında,
 	#[token("artarak")]
 	KeywordArtarak,
 	#[token("değil")]
@@ -76,6 +78,8 @@ pub enum TokenTable {
 	MathOperatorSubtract,
 	#[regex(r"\*")]
 	MathOperatorMultiply,
+	#[regex(r"\^")]
+	MathOperatorPower,
 	#[regex(r"\/")]
 	MathOperatorDivide,
 	#[regex(r"%")]
@@ -89,6 +93,8 @@ pub enum TokenTable {
 	AssignmentOperatorSubtract,
 	#[token(r"*=")]
 	AssignmentOperatorMultiply,
+	#[token(r"^=")]
+	AssignmentOperatorPower,
 	#[token(r"/=")]
 	AssignmentOperatorDivide,
 
@@ -180,6 +186,7 @@ impl TokenData {
 			TokenTable::MathOperatorMultiply => Expression::Mul,
 			TokenTable::MathOperatorDivide => Expression::Div,
 			TokenTable::MathOperatorMod => Expression::Mod,
+			TokenTable::MathOperatorPower => Expression::Pow,
 			TokenTable::ComparisonOperatorEqual => Expression::Equal,
 			TokenTable::ComparisonOperatorNotEqual => Expression::NotEqual,
 			TokenTable::ComparisonOperatorGreaterThan => Expression::GreaterThan,

@@ -9,7 +9,7 @@ pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<Tok
 	let out = Parsers::expression() // 0
 		.then_ignore(just(TokenTable::Keywordİle.asTokenData())) // ile
 		.then(Parsers::expression()) // 10
-		.then_ignore(just(TokenTable::KeywordAralığında.asTokenData())) // aralığında
+		.then_ignore(just(TokenTable::KeywordAralığında.asTokenData()).or(just(TokenTable::KeywordArasında.asTokenData()))) // aralığında / arasında
 		.then(
 			Parsers::expression().then_ignore(
 				just(TokenTable::KeywordArtarak.asTokenData())

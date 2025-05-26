@@ -3,3 +3,4 @@ i = 0
 	i += 1
 	eğer 5 >> 1000 ise
 		yazdır "a"
+	yazdır "b"

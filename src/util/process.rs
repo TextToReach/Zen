@@ -169,7 +169,9 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 							result = BlockOutput::Continue;
 							break;
 						}
-						Ok(BlockOutput::None) => {}
+						Ok(BlockOutput::None) => {
+
+						}
 						Err(e) => {
 							return Err(e);
 						}
@@ -198,7 +200,7 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 						}
 					}
 					// Else block
-					if !executed {
+					if !executed && condition.Else.scope_pointer != 0 {
 						match ExecuteBlock(condition.Else.scope_pointer, manager, src.clone(), span) {
 							Ok(BlockOutput::Break) => {
 								result = BlockOutput::Break;
@@ -355,10 +357,10 @@ pub fn index(input: &mut Vec<String>, full_source: String, verbose: bool, strict
 		}
 	}
 
-	println!("{:#?}\n-----------------------------------", manager.get_scope(0));
-	println!("{:#?}\n-----------------------------------", manager.get_scope(1));
-	println!("{:#?}\n-----------------------------------", manager.get_scope(2));
-	println!("{:#?}\n-----------------------------------", manager.get_scope(3));
+	// println!("{:#?}\n-----------------------------------", manager.get_scope(0));
+	// println!("{:#?}\n-----------------------------------", manager.get_scope(1));
+	// println!("{:#?}\n-----------------------------------", manager.get_scope(2));
+	// println!("{:#?}\n-----------------------------------", manager.get_scope(3));
 
 	if let Some((w, h)) = term_size::dimensions() {
 		manager.set_global(root_scope, "ekrangenişliği".to_string(), Object::from(w as f64));
