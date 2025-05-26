@@ -1,6 +1,7 @@
-i = 0
-5 kere tekrarla
-	i += 1
-	eğer 5 >> 1000 ise
-		yazdır "a"
-	yazdır "b"
+fonksiyon şunuyap()
+	i = 0
+	5 kere tekrarla
+		i += 1
+		yazdır i
+
+şunuyap()

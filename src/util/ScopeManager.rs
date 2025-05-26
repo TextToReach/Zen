@@ -4,7 +4,11 @@ use std::{
 	thread::scope,
 };
 
-use crate::{features::tokenizer::{InstructionEnum, TokenData}, library::Types::{Boolean, Function, Object, ParameterData, ResolvedParameterData}, parsers::Parsers::Expression};
+use crate::{
+	features::tokenizer::{InstructionEnum, TokenData},
+	library::Types::{Boolean, Function, Object, ParameterData, ResolvedParameterData},
+	parsers::Parsers::Expression,
+};
 
 #[derive(Debug, Clone)]
 pub enum ScopeAction {
@@ -45,21 +49,20 @@ use ScopeType::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConditionStructure {
-	pub scope_pointer: usize,	
-	pub condition: Expression
+	pub scope_pointer: usize,
+	pub condition: Expression,
 }
 
 impl ConditionStructure {
 	pub fn empty() -> Self {
 		Self {
 			condition: Expression::falsy(),
-			scope_pointer: 0
+			scope_pointer: 0,
 		}
 	}
 
 	pub fn is_empty(&self) -> bool {
-		matches!(self.condition, Expression::Value(ref obj) if matches!(**obj, Object::Bool(Boolean { value: false })))
-			&& self.scope_pointer == 0
+		matches!(self.condition, Expression::Value(ref obj) if matches!(**obj, Object::Bool(Boolean { value: false }))) && self.scope_pointer == 0
 	}
 }
 
@@ -67,7 +70,7 @@ impl ConditionStructure {
 pub struct ConditionBlock {
 	pub If: ConditionStructure,
 	pub Elif: Vec<ConditionStructure>,
-	pub Else: ConditionStructure
+	pub Else: ConditionStructure,
 }
 
 impl ConditionBlock {
@@ -89,13 +92,12 @@ impl ConditionBlock {
 			Elif: vec![],
 			Else: ConditionStructure::empty(),
 		}
-		
 	}
 
 	pub fn push_elif(&mut self, Elif: ConditionStructure) {
 		self.Elif.push(Elif);
 	}
-	
+
 	pub fn push_elifs(&mut self, Elifs: Vec<ConditionStructure>) {
 		for Elif in Elifs {
 			self.Elif.push(Elif);
@@ -153,22 +155,22 @@ impl ScopeManager {
 			globals: HashMap::new(),
 			scope_type: Default,
 		};
-		
+
 		if let Some(pid) = parent_id {
 			if let Some(parent_scope) = self.scopes.get_mut(&pid) {
 				parent_scope.children.insert(id);
 			}
 		}
-		
+
 		self.scopes.insert(id, scope);
 		id
 	}
-	
+
 	/// Transparent scopes redirect variable declaration requests to the upper scope.
 	pub fn create_transparent_scope(&mut self, parent_id: usize, action: Option<ScopeAction>) -> usize {
 		let id = self.next_id;
 		self.next_id += 1;
-		
+
 		let scope = Scope {
 			id,
 			action,
@@ -193,7 +195,7 @@ impl ScopeManager {
 	pub fn create_isolated_scope(&mut self, parent_id: usize, action: Option<ScopeAction>) -> usize {
 		let id = self.next_id;
 		self.next_id += 1;
-		
+
 		let scope = Scope {
 			id,
 			action,
@@ -231,6 +233,10 @@ impl ScopeManager {
 	pub fn get_parent(&self, id: usize) -> Option<usize> {
 		self.scopes.get(&id)?.parent
 	}
+
+	pub fn get_parent_mut(&mut self, id: usize) -> Option<&mut usize> {
+			self.scopes.get_mut(&id)?.parent.as_mut()
+		}
 
 	pub fn get_parent_of_parent(&self, id: usize) -> Option<usize> {
 		let first_parent = self.scopes.get(&id)?.parent;
@@ -301,32 +307,34 @@ impl ScopeManager {
 			false
 		}
 	}
-	
+
 	pub fn get_var_in_scope<T: AsRef<str>>(&self, scope_id: usize, name: T) -> Option<Object> {
 		let name = name.as_ref();
 		self.scopes.get(&scope_id)?.variables.get(name).cloned()
 	}
-	
+
 	/// Use this to retrieve variables.
 	pub fn get_var<T: AsRef<str>>(&self, mut scope_id: usize, name: T) -> Option<Object> {
 		let name = name.as_ref();
 		loop {
-			if let Some(value) = self.get_var_in_scope(scope_id, name) {
-				return Some(value);
-			}
-			// Check if current scope is isolated; if so, stop searching
+			// Try to find the variable in the current scope
 			if let Some(scope) = self.get_scope(scope_id) {
-				if let Some(global_value) = self.get_scope(0).unwrap().globals.get(name) {
-					return Some(global_value.clone());
+				if let Some(value) = scope.variables.get(name) {
+					return Some(value.clone());
 				}
+				// Check globals in the root scope (id 0)
+				if let Some(global) = self.scopes.get(&0).and_then(|root| root.globals.get(name)) {
+					return Some(global.clone());
+				}
+				// Stop if isolated, otherwise go up
 				if scope.scope_type.is_isolated() {
 					break;
 				}
-			} else {
-				break;
-			}
-			if let Some(parent_id) = self.get_parent(scope_id) {
-				scope_id = parent_id;
+				if let Some(parent_id) = scope.parent {
+					scope_id = parent_id;
+				} else {
+					break;
+				}
 			} else {
 				break;
 			}
@@ -335,10 +343,10 @@ impl ScopeManager {
 	}
 
 	pub fn reset_scope_vars(&mut self, scope_id: usize) {
-        if let Some(scope) = self.get_scope_mut(scope_id) {
-            scope.variables.clear();
-        }
-    }
+		if let Some(scope) = self.get_scope_mut(scope_id) {
+			scope.variables.clear();
+		}
+	}
 
 	pub fn get_parent_scope(&self, id: usize) -> Option<&Scope> {
 		let parent_id = self.get_parent(id)?;

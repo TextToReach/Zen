@@ -46,20 +46,19 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				};
 
 				let mut temp_scope_id = scope_id.clone();
-				loop {
-					let current_scope_var = manager.does_var_exists(scope_id, name.clone());
-					if current_scope_var {
-						manager.set_var(temp_scope_id, name.clone(), new_value.clone());
-						break;
-					} else {
-						if let Some(parent) = manager.get_parent(temp_scope_id) {
+				if manager.get_scope(scope_id).unwrap().scope_type.is_transparent() {
+					// If the scope is transparent, we need to find the first non-transparent parent scope
+					while let Some(parent) = manager.get_parent(temp_scope_id) {
+						if !manager.get_scope(parent).unwrap().scope_type.is_transparent() {
 							temp_scope_id = parent;
-						} else {
-							manager.set_var(temp_scope_id, name.clone(), new_value.clone());
 							break;
 						}
 					}
+				} else {
+					temp_scope_id = scope_id;
 				}
+
+				manager.set_var(temp_scope_id, name, new_value);
 			}
 			InstructionEnum::WhileTrue { scope_pointer } => {
 				loop {
