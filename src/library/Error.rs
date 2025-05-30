@@ -1,5 +1,8 @@
+use chumsky::error::Simple;
 use thiserror::Error;
 use miette::{Diagnostic, NamedSource, SourceSpan};
+
+use crate::features::tokenizer::TokenData;
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("Girinti Hatası")]
@@ -85,6 +88,22 @@ pub struct EksikArguman {
     pub expected: Option<String>,
 }
 
+#[derive(Error, Debug, Diagnostic)]
+#[error("Token Hatası")]
+#[diagnostic(
+    help("Beklenen token: {expected:#?}\nAlınan token: {got:?}")
+)]
+pub struct TokenHatası {
+    #[source_code]
+    pub src: NamedSource<String>,
+
+    #[label("Hatalı token burada.")]
+    pub bad_bit: SourceSpan,
+
+    pub expected: Vec<String>,
+
+    pub got: String,
+}
 
 impl TipHatası {
     pub fn expected(expected: String, got: String, src: NamedSource<String>, bad_bit: SourceSpan) -> Self {

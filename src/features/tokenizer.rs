@@ -4,8 +4,9 @@ use std::{
 	default, fmt::{write, Debug, Display}, ops::{Neg, Not, Range}
 };
 
-use crate::{library::Types::{Object, ParameterData}, parsers::Parsers::Expression, util::ScopeManager::{ConditionBlock, ScopeAction}};
+use crate::{library::Types::{Object, ParameterData, RandomizerType, TimeUnit}, parsers::Parsers::Expression, util::ScopeManager::{ConditionBlock, ScopeAction, ScopeManager}, Input};
 use logos::Logos;
+use rand::Rng;
 
 #[derive(Clone, Logos, Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub enum TokenTable {
@@ -14,6 +15,9 @@ pub enum TokenTable {
 
 	#[token(r"//")]
 	Comment,
+
+	#[token("?")]
+	QuestionMark,
 
 	#[token("eğer")]
 	KeywordEğer,
@@ -30,6 +34,27 @@ pub enum TokenTable {
 	KeywordMetin,
 	#[token("mantıksal")]
 	KeywordMantıksal,
+	#[token("harf")]
+	KeywordHarf,
+
+	#[token("salise")]
+	KeywordSalise,
+	#[token("saniye")]
+	KeywordSaniye,
+	#[token("dakika")]
+	KeywordDakika,
+	#[token("saat")]
+	KeywordSaat,
+	#[token("gün")]
+	KeywordGün,
+	#[token("hafta")]
+	KeywordHafta,
+	#[token("ay")]
+	KeywordAy,
+	#[token("yıl")]
+	KeywordYıl,
+	#[token("bekle")]
+	KeywordBekle,
 
 	#[token("ve")]
 	KeywordVe,
@@ -48,6 +73,8 @@ pub enum TokenTable {
 
 	#[token("yazdır")]
 	KeywordYazdır,
+	#[token("girdi")]
+	KeywordGirdi,
 	#[regex(r"sürekli[ \t]+tekrarla")]
 	KeywordSürekliTekrarla,
 	#[regex(r"(?:defa|kere|kez)[ \t]+tekrarla")]
@@ -56,8 +83,12 @@ pub enum TokenTable {
 	KeywordFonksiyon,
 	#[regex(r"devam[ \t]+et")]
 	KeywordDevamEt,
-	#[regex(r"durdur")]
+	#[token(r"durdur")]
 	KeywordDurdur,
+	#[token("tip")]
+	KeywordTip,
+	#[token("rastgele")]
+	KeywordRastgele,
 
 	#[token("==")]
 	ComparisonOperatorEqual,
@@ -315,10 +346,76 @@ impl ConditionBlockType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ExpressionOrYieldInstruction {
+	Expression(Expression),
+	Instruction(YieldInstructionEnum),
+}
+
+impl ExpressionOrYieldInstruction {
+	pub fn is_expression(&self) -> bool {
+		matches!(self, ExpressionOrYieldInstruction::Expression(_))
+	}
+	pub fn is_instruction(&self) -> bool {
+		matches!(self, ExpressionOrYieldInstruction::Instruction(_))
+	}
+
+	pub fn resolve(&self, currentScope: usize, manager: &mut ScopeManager) -> Expression {
+		match self {
+			ExpressionOrYieldInstruction::Expression(expr) => expr.clone(),
+			ExpressionOrYieldInstruction::Instruction(instr) => match instr {
+				YieldInstructionEnum::Input { quote, _type } => {
+					let out = Object::from(Input!(quote.clone().evaluate(currentScope, manager)));
+					if _type.is_none() {
+						return Expression::Value(Box::new(out));
+					} else {
+						match _type.clone().unwrap().token {
+							TokenTable::KeywordSayı => Expression::from(Object::Number(out.forceIntoNumber())),
+							TokenTable::KeywordMetin => Expression::from(Object::Text(out.forceIntoText())),
+							TokenTable::KeywordMantıksal => Expression::from(Object::Bool(out.forceIntoBool())),
+							_ => Expression::Value(Box::new(out)),
+						}
+					}
+				},
+				YieldInstructionEnum::Random { method, from, to } => {
+					let out = match method {
+						RandomizerType::Number => {
+							let from_val = from.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
+							let to_val = to.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
+							let mut rng = rand::rng();
+							let rand_num = rng.random_range(from_val..=to_val);
+							Expression::from(rand_num as f64)
+						}
+						RandomizerType::Letter => {
+							panic!("Random letter generation is not implemented yet.");
+						},
+
+					};
+					// println!("Random instruction: {method:#?} from: {from:#?} to: {to:#?} with result: {out:#?}");
+					out
+				},
+				YieldInstructionEnum::RandomVar(name) => {
+					println!("Random var instruction: {name}");
+					Expression::falsy()
+				},
+			},
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum YieldInstructionEnum {
+	Input{ quote: Expression, _type: Option<TokenData> },
+	Random{ method: RandomizerType, from: Expression, to: Expression },
+	RandomVar(String)
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
 	NoOp,
 	Print(Vec<Expression>),
+	Type(Vec<Expression>),
 	Input(Vec<TokenData>),
+	Wait { amount: Expression, unit: TimeUnit },
 	
 	// BLOCKS
 	Repeat 		{ scope_pointer: usize, repeat_count: Expression },
@@ -332,7 +429,7 @@ pub enum InstructionEnum {
 	// BLOCKS
 
 	CallFunction { name: String, args: Vec<Expression> },
-	VariableDeclaration(String, Expression, AssignmentMethod),
+	VariableDeclaration(String, ExpressionOrYieldInstruction, AssignmentMethod),
 	Break,
 	Continue
 }

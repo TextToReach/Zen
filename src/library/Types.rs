@@ -6,9 +6,10 @@ use chumsky::text::whitespace;
 use chumsky::{Parser, error::Simple};
 use colored::Colorize;
 use miette::{NamedSource, SourceSpan};
+use num::iter::Range;
 use num::pow::Pow;
 
-use crate::features::tokenizer::{TokenData, TokenTable};
+use crate::features::tokenizer::{RemoveQuotes, TokenData, TokenTable};
 use crate::library::Methods::Throw;
 use crate::parsers::Parsers::Expression;
 use crate::util::ScopeManager::ScopeManager;
@@ -20,12 +21,14 @@ use std::{fmt::Display, num::ParseFloatError, str::FromStr};
 
 use super::Error::TipHatası;
 
-/// Exact eq's:
+
+static LETTERARRAY: &'static str = "abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ";
+
+/// The exact equals:
 /// - Number = f64
 /// - Text = String
+/// - Boolean = bool
 /// - Array = Vec<Object>
-
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjectComparison {
 	BothNumber(Number, Number),
@@ -199,7 +202,7 @@ impl Object {
 				"Verilen tipin bir sayı olması bekleniyordu.".to_string(),
 				format!("{:?}", self),
 				src,
-				span
+				span,
 			))
 		}
 	}
@@ -213,7 +216,7 @@ impl Object {
 					"Verilen tipin bir pozitif sayı olması bekleniyordu.".to_string(),
 					format!("{:?}", self),
 					src,
-					span
+					span,
 				))
 			}
 		} else {
@@ -221,7 +224,7 @@ impl Object {
 				"Verilen tipin bir pozitif sayı olması bekleniyordu.".to_string(),
 				format!("{:?}", self),
 				src,
-				span
+				span,
 			))
 		}
 	}
@@ -234,7 +237,7 @@ impl Object {
 				"Verilen tipin bir metin olması bekleniyordu.".to_string(),
 				format!("{:?}", self),
 				src,
-				span
+				span,
 			))
 		}
 	}
@@ -247,7 +250,7 @@ impl Object {
 				"Verilen tipin br mantıksal olması bekleniyordu.".to_string(),
 				format!("{:?}", self),
 				src,
-				span
+				span,
 			))
 		}
 	}
@@ -265,6 +268,73 @@ impl Object {
 				src,
 				span,
 			)),
+		}
+	}
+
+	pub fn forceIntoNumber(&self) -> Number {
+		match self {
+			Object::Number(val) => val.clone(),
+			Object::Text(val) => Number::from(val.value.parse::<f64>().unwrap_or(0.0)),
+			Object::Bool(val) => Number::from(if val.value { 1.0 } else { 0.0 }),
+			Object::Variable(val) => Number::from(val.parse::<f64>().unwrap_or(0.0)),
+			Object::Null => Number::from(0.0),
+		}
+	}
+
+	pub fn forceIntoText(&self) -> Text {
+		match self {
+			Object::Number(val) => Text::from(val.value.to_string()),
+			Object::Text(val) => val.clone(),
+			Object::Bool(val) => Text::from(val.value.to_string()),
+			Object::Variable(val) => Text::from(val.clone()),
+			Object::Null => Text::from("NIL".to_string()),
+		}
+	}
+
+	pub fn forceIntoBool(&self) -> Boolean {
+		match self {
+			Object::Number(val) => Boolean::from(val.value != 0.0),
+			Object::Text(val) => Boolean::from(match val.value.as_str() {
+				"true" | "doğru" | "evet" | "yes" => true,
+				"false" | "yanlış" | "hayır" | "no" => false,
+				_ => false,
+			}),
+			Object::Bool(val) => val.clone(),
+			Object::Variable(val) => Boolean::from(!val.remove_quotes().is_empty()),
+			Object::Null => Boolean::from(false),
+		}
+	}
+
+	pub fn convertToNumber(&self) -> Result<Number, ()> {
+		match self {
+			Object::Number(val) => Ok(val.clone()),
+			Object::Text(val) => match val.value.parse::<f64>() {
+				Ok(num) => Ok(Number::from(num)),
+				Err(_) => Err(()),
+			},
+			Object::Bool(val) => Err(()),
+			Object::Variable(val) => Err(()), // I mean, if you try to force a variable into a number, you have problems.
+			Object::Null => Err(()),
+		}
+	}
+
+	pub fn convertToText(&self) -> Result<Text, ()> {
+		match self {
+			Object::Text(val) => Ok(val.clone()),
+			Object::Number(val) => Err(()),
+			Object::Bool(val) => Err(()),
+			Object::Variable(val) => Err(()),
+			Object::Null => Err(()),
+		}
+	}
+
+	pub fn convertToBool(&self) -> Result<Boolean, ()> {
+		match self {
+			Object::Bool(val) => Ok(val.clone()),
+			Object::Number(_) => Err(()),
+			Object::Text(_) => Err(()),
+			Object::Variable(_) => Err(()),
+			Object::Null => Err(()),
 		}
 	}
 }
@@ -357,41 +427,41 @@ impl Pow<Object> for Object {
 impl PartialOrd for Object {
 	fn gt(&self, other: &Self) -> bool {
 		match ObjectComparison::from((self, other)) {
-			ObjectComparison::BothNumber(x, y)         => x > y,
-			ObjectComparison::BothText(x, y)           => x.value.len() > y.value.len(),
-			ObjectComparison::BothBoolean(x, y)        => x.value & !y.value,
-			ObjectComparison::BothVariable(x, y)       => x > y,
-			ObjectComparison::NumberAndText(x, y)      => x.value > y.value.len() as f64,
-			ObjectComparison::NumberAndBoolean(x, y)   => x.value > Number::from(y).value,
-			ObjectComparison::NumberAndVariable(x, y)  => x.value.to_string() > y,
-			ObjectComparison::TextAndNumber(x, y)      => x.value.len() as f64 > y.value,
-			ObjectComparison::TextAndBoolean(x, y)     => x.value.len() > (if y.value { 1 } else { 0 }),
-			ObjectComparison::TextAndVariable(x, y)    => x.value > y,
-			ObjectComparison::BooleanAndNumber(x, y)   => Number::from(x).value > y.value,
-			ObjectComparison::BooleanAndText(x, y)     => Number::from(x).value as usize > y.value.len(),
+			ObjectComparison::BothNumber(x, y) => x > y,
+			ObjectComparison::BothText(x, y) => x.value.len() > y.value.len(),
+			ObjectComparison::BothBoolean(x, y) => x.value & !y.value,
+			ObjectComparison::BothVariable(x, y) => x > y,
+			ObjectComparison::NumberAndText(x, y) => x.value > y.value.len() as f64,
+			ObjectComparison::NumberAndBoolean(x, y) => x.value > Number::from(y).value,
+			ObjectComparison::NumberAndVariable(x, y) => x.value.to_string() > y,
+			ObjectComparison::TextAndNumber(x, y) => x.value.len() as f64 > y.value,
+			ObjectComparison::TextAndBoolean(x, y) => x.value.len() > (if y.value { 1 } else { 0 }),
+			ObjectComparison::TextAndVariable(x, y) => x.value > y,
+			ObjectComparison::BooleanAndNumber(x, y) => Number::from(x).value > y.value,
+			ObjectComparison::BooleanAndText(x, y) => Number::from(x).value as usize > y.value.len(),
 			ObjectComparison::BooleanAndVariable(x, y) => x.value.to_string() > y,
-			ObjectComparison::VariableAndNumber(x, y)  => self > &Object::Number(y.clone()),
-			ObjectComparison::VariableAndText(x, y)    => self > &Object::Text(y.clone()),
+			ObjectComparison::VariableAndNumber(x, y) => self > &Object::Number(y.clone()),
+			ObjectComparison::VariableAndText(x, y) => self > &Object::Text(y.clone()),
 			ObjectComparison::VariableAndBoolean(x, y) => self > &Object::Bool(y.clone()),
 		}
 	}
 	fn lt(&self, other: &Self) -> bool {
 		match ObjectComparison::from((self, other)) {
-			ObjectComparison::BothNumber(x, y)         => x < y,
-			ObjectComparison::BothText(x, y)           => x.value.len() < y.value.len(),
-			ObjectComparison::BothBoolean(x, y)        => !x.value & y.value,
-			ObjectComparison::BothVariable(x, y)       => x < y,
-			ObjectComparison::NumberAndText(x, y)      => x.value < y.value.len() as f64,
-			ObjectComparison::NumberAndBoolean(x, y)   => x.value < Number::from(y).value,
-			ObjectComparison::NumberAndVariable(x, y)  => x.value.to_string() < y,
-			ObjectComparison::TextAndNumber(x, y)      => (x.value.len() as f64) < y.value,
-			ObjectComparison::TextAndBoolean(x, y)     => x.value.len() < (if y.value { 1 } else { 0 }),
-			ObjectComparison::TextAndVariable(x, y)    => x.value < y,
-			ObjectComparison::BooleanAndNumber(x, y)   => Number::from(x).value < y.value,
-			ObjectComparison::BooleanAndText(x, y)     => (Number::from(x).value as usize) < y.value.len(),
+			ObjectComparison::BothNumber(x, y) => x < y,
+			ObjectComparison::BothText(x, y) => x.value.len() < y.value.len(),
+			ObjectComparison::BothBoolean(x, y) => !x.value & y.value,
+			ObjectComparison::BothVariable(x, y) => x < y,
+			ObjectComparison::NumberAndText(x, y) => x.value < y.value.len() as f64,
+			ObjectComparison::NumberAndBoolean(x, y) => x.value < Number::from(y).value,
+			ObjectComparison::NumberAndVariable(x, y) => x.value.to_string() < y,
+			ObjectComparison::TextAndNumber(x, y) => (x.value.len() as f64) < y.value,
+			ObjectComparison::TextAndBoolean(x, y) => x.value.len() < (if y.value { 1 } else { 0 }),
+			ObjectComparison::TextAndVariable(x, y) => x.value < y,
+			ObjectComparison::BooleanAndNumber(x, y) => Number::from(x).value < y.value,
+			ObjectComparison::BooleanAndText(x, y) => (Number::from(x).value as usize) < y.value.len(),
 			ObjectComparison::BooleanAndVariable(x, y) => x.value.to_string() < y,
-			ObjectComparison::VariableAndNumber(x, y)  => self < &Object::Number(y.clone()),
-			ObjectComparison::VariableAndText(x, y)    => self < &Object::Text(y.clone()),
+			ObjectComparison::VariableAndNumber(x, y) => self < &Object::Number(y.clone()),
+			ObjectComparison::VariableAndText(x, y) => self < &Object::Text(y.clone()),
 			ObjectComparison::VariableAndBoolean(x, y) => self < &Object::Bool(y.clone()),
 		}
 	}
@@ -544,7 +614,9 @@ impl Into<bool> for Boolean {
 
 impl From<Boolean> for Number {
 	fn from(value: Boolean) -> Self {
-		Self { value: if value.value {1.0} else {0.0} }
+		Self {
+			value: if value.value { 1.0 } else { 0.0 },
+		}
 	}
 }
 
@@ -600,7 +672,8 @@ impl Display for Text {
 
 impl Display for Boolean {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.value)
+		let temp = format!("{}", if self.value { "doğru" } else { "yanlış" });
+		write!(f, "{}", temp.bright_blue())
 	}
 }
 
@@ -616,31 +689,51 @@ impl Display for Object {
 	}
 }
 
+// ------------------------------------------ Extras ------------------------------------------
 
 pub trait CutFromStart<T> {
-    fn cut_from_start(&self, whr: fn(&T) -> bool, amount: usize) -> Self;
-    fn count_from_start(&self, whr: fn(&T) -> bool) -> usize;
+	fn cut_from_start(&self, whr: fn(&T) -> bool, amount: usize) -> Self;
+	fn count_from_start(&self, whr: fn(&T) -> bool) -> usize;
 }
 impl CutFromStart<TokenData> for Vec<TokenData> {
-    fn cut_from_start(&self, whr: fn(&TokenData) -> bool, amount: usize) -> Self {
-        let mut inner_self = self.clone();
-        let amount = usize::min(amount, inner_self.len());
-        for i in (0..amount).rev() {
-            if whr(&inner_self[i]) {
-                inner_self.remove(i);
-            }
-        }
-        inner_self
-    }
+	fn cut_from_start(&self, whr: fn(&TokenData) -> bool, amount: usize) -> Self {
+		let mut inner_self = self.clone();
+		let amount = usize::min(amount, inner_self.len());
+		for i in (0..amount).rev() {
+			if whr(&inner_self[i]) {
+				inner_self.remove(i);
+			}
+		}
+		Object::from("")..Object::from("");
+		inner_self
+	}
 
-    fn count_from_start(&self, whr: fn(&TokenData) -> bool) -> usize {
-        let mut count = 0;
-        for el in self.clone() {
-            if whr(&el) {
-                count += 1;
-            }
-        }
+	fn count_from_start(&self, whr: fn(&TokenData) -> bool) -> usize {
+		let mut count = 0;
+		for el in self.clone() {
+			if whr(&el) {
+				count += 1;
+			}
+		}
 
-        count
-    }
+		count
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RandomizerType {
+	Number,
+	Letter,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeUnit {
+	Millisecond,
+	Second,
+	Minute,
+	Hour,
+	Day,
+	Week,
+	Month,
+	Year,
 }

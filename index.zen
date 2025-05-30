@@ -1,7 +1,4 @@
-fonksiyon şunuyap()
-	i = 0
-	5 kere tekrarla
-		i += 1
-		yazdır i
-
-şunuyap()
+sürekli tekrarla
+	a = rastgele sayı "", ekrangenişliği-1
+	yazdır " "*a, "*"
+	100 salise bekle

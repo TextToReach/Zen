@@ -12,11 +12,15 @@ pub mod Print;
 pub mod Repeat;
 pub mod WhileTrue;
 pub mod For;
+pub mod Input;
+pub mod Type;
+pub mod Random;
+pub mod Wait;
 
 pub mod Parsers {
-	use super::{Break, Continue, Define, Elif, Else, For, Function, FunctionCall, If, Print, Repeat, WhileTrue};
-	use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable};
-	use crate::library::Types::{Object, ParameterData};
+	use super::{Break, Continue, Define, Elif, Else, For, Function, FunctionCall, If, Input, Print, Random, Repeat, Type, Wait, WhileTrue};
+	use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum};
+	use crate::library::Types::{Object, ParameterData, RandomizerType};
 	use crate::util::ScopeManager::ScopeManager;
 	use chumsky::prelude::*;
 	use num::pow::Pow;
@@ -58,6 +62,17 @@ pub mod Parsers {
 				WithoutIndentation(Define::parser()),
 				WithoutIndentation(Break::parser()),
 				WithoutIndentation(Continue::parser()),
+				WithoutIndentation(Type::parser()),
+				WithoutIndentation(Wait::parser()),
+			])
+		}))
+	}
+
+	pub fn yield_instruction_parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simple<TokenData>>> {
+		Box::new(recursive(|instr_parser| {
+			choice([
+				Input::parser(),
+				Random::parser()
 			])
 		}))
 	}
@@ -78,6 +93,32 @@ pub mod Parsers {
 		GreaterThanOrEqual(Box<Expression>, Box<Expression>),
 		Equal(Box<Expression>, Box<Expression>),
 		NotEqual(Box<Expression>, Box<Expression>),
+	}
+
+	impl From<f64> for Expression {
+		fn from(value: f64) -> Self {
+			Expression::Value(Box::new(Object::from(value)))
+		}
+	}
+	impl From<String> for Expression {
+		fn from(value: String) -> Self {
+			Expression::Value(Box::new(Object::from(value)))
+		}
+	}
+	impl From<&str> for Expression {
+		fn from(value: &str) -> Self {
+			Expression::Value(Box::new(Object::from(value.to_owned())))
+		}
+	}
+	impl From<bool> for Expression {
+		fn from(value: bool) -> Self {
+			Expression::Value(Box::new(Object::from(value)))
+		}
+	}
+	impl From<Object> for Expression {
+		fn from(value: Object) -> Self {
+			Expression::Value(Box::new(value))
+		}
 	}
 
 	impl Expression {
@@ -176,7 +217,7 @@ pub mod Parsers {
 					|| x.token == TokenTable::BooleanLiteral
 					|| x.token == TokenTable::Identifier
 			})
-			.map(|x| Expression::Value(Box::new(x.asObject()))),
+			.map(|x| Expression::from(x.asObject())),
 		)
 	}
 
@@ -188,7 +229,7 @@ pub mod Parsers {
 			let atom = Rc::new(
 				just(TokenTable::MathOperatorSubtract.asTokenData())
 					.then(object())
-					.map(|(_, obj)| Expression::Sub(Box::new(Expression::Value(Box::new(0f64.into()))), Box::new(obj)))
+					.map(|(_, obj)| Expression::Sub(Box::new(Expression::from(0f64)), Box::new(obj)))
 					.or(object())
 					.or(expr.delimited_by(paren_left, paren_right))
 			);
@@ -290,6 +331,15 @@ pub mod Parsers {
 					data_type: Some(type_),
 					default_value: default,
 				}),
+		)
+	}
+
+	pub fn random_variants() -> Box<dyn Parser<TokenData, RandomizerType, Error = Simple<TokenData>>> {
+		Box::new(
+			choice([
+				just(TokenTable::KeywordSayı.asTokenData()).to(RandomizerType::Number),
+				just(TokenTable::KeywordHarf.asTokenData()).to(RandomizerType::Letter),
+			])
 		)
 	}
 }
