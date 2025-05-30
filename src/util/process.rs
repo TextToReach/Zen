@@ -274,10 +274,17 @@ pub fn ProcessLine(
 	if instr.0.indent {
 		let mut instr_enum = instr.clone().1;
 		let new_scope = match instr_enum {
-			InstructionEnum::IfBlock { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
-			InstructionEnum::ElifBlock { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
-			InstructionEnum::ElseBlock { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
-			InstructionEnum::Function { .. } => manager.create_isolated_scope(*current_scope_id, Some(instr_enum.as_block_action())),
+			InstructionEnum::IfBlock { .. } |
+			InstructionEnum::ElifBlock { .. } |
+			InstructionEnum::ElseBlock { .. } |
+			InstructionEnum::For { .. } |
+			InstructionEnum::WhileTrue { .. } |
+			InstructionEnum::Repeat { .. } => {
+				manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action()))
+			}
+			InstructionEnum::Function { .. } => {
+				manager.create_isolated_scope(*current_scope_id, Some(instr_enum.as_block_action()))
+			}
 			_ => manager.create_scope(Some(*current_scope_id), Some(instr_enum.as_block_action())),
 		};
 

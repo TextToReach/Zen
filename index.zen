@@ -1,4 +1,15 @@
+random = rastgele sayı 1, 100
+tahminsayısı = 0
+
+yazdır "Program 1 ile 100 arasında rastgele bir sayı tuttu. Bu sayıyı tahmin etmeniz gerekiyor.", random
+
 sürekli tekrarla
-	a = rastgele sayı "", ekrangenişliği-1
-	yazdır " "*a, "*"
-	100 salise bekle
+	tahmin = girdi(sayı) ">"
+	eğer tahmin == random ise
+		durdur
+	değilse ve tahmin >> random ise
+		yazdır "Lower"
+	değilse
+		yazdır "Higher"
+	tahminsayısı += 1
+yazdır "DOĞRU TAHMİN! Tam olarak", tahminsayısı, "denemede doğru sonuca ulaştın."

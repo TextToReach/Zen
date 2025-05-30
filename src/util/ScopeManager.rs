@@ -275,11 +275,11 @@ impl ScopeManager {
 	pub fn set_var(&mut self, scope_id: usize, name: String, value: Object) {
 		let mut current_id = scope_id;
 		loop {
-			let is_transparent = match self.get_scope(current_id) {
+			let scope_type = match self.get_scope(current_id) {
 				Some(scope) => scope.scope_type,
 				None => break,
 			};
-			match is_transparent {
+			match scope_type {
 				Transparent { parent } => {
 					current_id = parent;
 				}
