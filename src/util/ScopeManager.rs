@@ -6,7 +6,10 @@ use std::{
 
 use crate::{
 	features::tokenizer::{ExpOrInstr, InstructionEnum, TokenData},
-	library::{Error::{CokFazlaArguman, EksikArguman, FonksiyonBulunamadı}, Types::{Boolean, Function, Object, ParameterData, ResolvedParameterData}},
+	library::{
+		Error::{CokFazlaArguman, EksikArguman, FonksiyonBulunamadı},
+		Types::{Boolean, Function, Object, ParameterData, ResolvedParameterData},
+	},
 	parsers::Parsers::Expression,
 };
 
@@ -15,6 +18,7 @@ pub enum ScopeAction {
 	RootScope,
 	Repeat(ExpOrInstr),
 	For(ExpOrInstr, ExpOrInstr, Option<ExpOrInstr>, String),
+	ForIn{ name: String, step: Option<ExpOrInstr> },
 	WhileTrue,
 	Condition(ExpOrInstr),
 	Function { name: String, args: Vec<ParameterData> },
@@ -45,8 +49,8 @@ impl ScopeType {
 	}
 }
 
-use miette::{NamedSource, SourceSpan};
 use ScopeType::*;
+use miette::{NamedSource, SourceSpan};
 
 use super::process::{BlockOutput, ExecuteBlock};
 
@@ -400,11 +404,18 @@ impl ScopeManager {
 
 	pub fn call_function<T: AsRef<str>>(&mut self, scope_id: usize, name: T, args: Vec<Expression>) -> Option<Object> {
 		let name = name.as_ref();
-		let function_scope = self.get_function(scope_id, name).unwrap_or_else(|| panic!("Function {} not found in scope {}", name, scope_id));
+		let function_scope = self
+			.get_function(scope_id, name)
+			.unwrap_or_else(|| panic!("Function {} not found in scope {}", name, scope_id));
 		let resolved_args = args.iter().map(|x| x.evaluate(scope_id, self)).collect::<Vec<_>>();
 		let funcdef_args = &function_scope.args;
 		if resolved_args.len() > funcdef_args.len() {
-			panic!("Too many arguments passed to function {}. Expected {}, got {}", name, funcdef_args.len(), resolved_args.len());
+			panic!(
+				"Too many arguments passed to function {}. Expected {}, got {}",
+				name,
+				funcdef_args.len(),
+				resolved_args.len()
+			);
 		}
 		for (i, param) in funcdef_args.iter().enumerate() {
 			let value = if i < resolved_args.len() {
@@ -412,18 +423,30 @@ impl ScopeManager {
 			} else if let Some(default) = &param.default_value {
 				default.clone()
 			} else {
-				panic!("Missing argument {} for function {}. Expected {}, got {}", param.name, name, funcdef_args.len(), resolved_args.len());
+				panic!(
+					"Missing argument {} for function {}. Expected {}, got {}",
+					param.name,
+					name,
+					funcdef_args.len(),
+					resolved_args.len()
+				);
 			};
 
 			// Type checking
 			if let Some(expected_type) = &param.data_type {
-				value.expectToBe(expected_type.clone(), NamedSource::new("", "".to_owned()), SourceSpan::new(0.into(), 0))
+				value
+					.expectToBe(expected_type.clone(), NamedSource::new("", "".to_owned()), SourceSpan::new(0.into(), 0))
 					.unwrap_or_else(|e| panic!("Type error in function {}: {}", name, e));
 			}
 
 			self.set_var(function_scope.scope_pointer, param.name.clone(), value);
 		}
-		match ExecuteBlock(function_scope.scope_pointer, self, NamedSource::new("", "".to_owned()), SourceSpan::new(0.into(), 0)) {
+		match ExecuteBlock(
+			function_scope.scope_pointer,
+			self,
+			NamedSource::new("", "".to_owned()),
+			SourceSpan::new(0.into(), 0),
+		) {
 			Ok(BlockOutput::Return(x)) => {
 				return Some(x);
 			}

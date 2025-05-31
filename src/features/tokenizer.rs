@@ -1,10 +1,17 @@
 #![allow(dead_code)]
 
 use std::{
-	default, fmt::{write, Debug, Display}, ops::{Neg, Not, Range}
+	default,
+	fmt::{Debug, Display, write},
+	ops::{Neg, Not, Range},
 };
 
-use crate::{library::Types::{Object, ParameterData, RandomizerType, TimeUnit}, parsers::Parsers::Expression, util::ScopeManager::{ConditionBlock, ScopeAction, ScopeManager}, Input};
+use crate::{
+	Input,
+	library::Types::{Object, ParameterData, RandomizerType, TimeUnit},
+	parsers::Parsers::Expression,
+	util::ScopeManager::{ConditionBlock, ScopeAction, ScopeManager},
+};
 use logos::Logos;
 use rand::Rng;
 
@@ -68,10 +75,14 @@ pub enum TokenTable {
 	Keywordİle,
 	#[token("aralığında")]
 	KeywordAralığında,
+	#[token("içinde")]
+	Keywordİçinde,
 	#[token("arasında")]
 	KeywordArasında,
 	#[token("artarak")]
 	KeywordArtarak,
+	#[token("dolan")]
+	KeywordDolan,
 	#[token("değil")]
 	KeywordDeğil,
 
@@ -108,7 +119,7 @@ pub enum TokenTable {
 	ComparisonOperatorLessThanOrEqual,
 	#[token(">=")]
 	ComparisonOperatorGreaterThanOrEqual,
-	
+
 	#[regex(r"\+")]
 	MathOperatorAdd,
 	#[regex(r"\-")]
@@ -143,18 +154,14 @@ pub enum TokenTable {
 	Colon,
 
 	#[token("[")]
-	RSQBRACKET,
-	#[token("]")]
 	LSQBRACKET,
-	#[token("[]")]
-	EmptySqBrackets,
+	#[token("]")]
+	RSQBRACKET,
 
 	#[token("{")]
-	RCRBRACKET,
-	#[token("}")]
 	LCRBRACKET,
-	#[token("{}")]
-	EmptyCrBrackets,
+	#[token("}")]
+	RCRBRACKET,
 
 	#[token(";")]
 	Semicolon,
@@ -169,12 +176,13 @@ pub enum TokenTable {
 	StringLiteral,
 	#[regex(r"(0|[1-9][0-9]*)(\.[0-9]+)?")]
 	NumberLiteral,
-	#[regex(r"[abcçdefgğhıijklmnoöprsştuüvyzqwxABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZQWX_][abcçdefgğhıijklmnoöprsştuüvyzqwxABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZQWX0-9_]*")]
+	#[regex(
+		r"[abcçdefgğhıijklmnoöprsştuüvyzqwxABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZQWX_][abcçdefgğhıijklmnoöprsştuüvyzqwxABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZQWX0-9_]*"
+	)]
 	Identifier,
 
 	#[regex(r"[ \n\r]+", logos::skip)]
 	Error,
-
 }
 
 impl TokenTable {
@@ -230,10 +238,8 @@ impl TokenData {
 			TokenTable::ComparisonOperatorGreaterThanOrEqual => Expression::GreaterThanOrEqual,
 			TokenTable::ComparisonOperatorLessThan => Expression::LessThan,
 			TokenTable::ComparisonOperatorLessThanOrEqual => Expression::LessThanOrEqual,
-			_ => panic!()
+			_ => panic!(),
 		}
-
-		
 	}
 
 	pub fn asNumberLiteral(&self, isNegative: bool) -> f64 {
@@ -241,7 +247,7 @@ impl TokenData {
 			TokenTable::NumberLiteral => {
 				let num = self.slice.parse::<f64>().unwrap_or(0.0); // TODO: Replace all unwrap_or statements with proper errors.
 				if isNegative { -num } else { num }
-			},
+			}
 			_ => 0.0,
 		}
 	}
@@ -335,14 +341,20 @@ impl PartialEq for TokenData {
 impl Eq for TokenData {}
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AssignmentMethod { Set, Add, Sub, Mul, Div }
+pub enum AssignmentMethod {
+	Set,
+	Add,
+	Sub,
+	Mul,
+	Div,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConditionBlockType {
 	If,
 	Elif,
 	Else,
-	None
+	None,
 }
 
 impl ConditionBlockType {
@@ -392,11 +404,11 @@ impl ExpOrInstr {
 							_ => Expression::Value(Box::new(out)),
 						}
 					}
-				},
+				}
 				YieldInstructionEnum::Random { method, span } => {
 					let out = match method {
 						RandomizerType::Number => {
-							let span = span.clone().unwrap_or(( Expression::from(0.0), Expression::from(1.0) ));
+							let span = span.clone().unwrap_or((Expression::from(0.0), Expression::from(1.0)));
 							let from_val = span.0.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
 							let to_val = span.1.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
 							let mut rng = rand::rng();
@@ -411,29 +423,24 @@ impl ExpOrInstr {
 							let rand_bool = rng.random_bool((chance.evaluate(currentScope, manager).forceIntoNumber().value / 100.0).clamp(0.0, 1.0));
 							Expression::from(rand_bool)
 						}
-
 					};
 					// println!("Random instruction: {method:#?} from: {from:#?} to: {to:#?} with result: {out:#?}");
 					out
-				},
+				}
 				YieldInstructionEnum::CallFunction { name, args } => {
 					let mut args_evaluated = Vec::new();
 					for arg in args {
 						args_evaluated.push(Expression::from(arg.evaluate(currentScope, manager)));
 					}
 					match manager.call_function(currentScope, name, args_evaluated) {
-						Some(result) => {
-							Expression::from(result)
-						},
-						None => {
-							Expression::falsy()
-						}
+						Some(result) => Expression::from(result),
+						None => Expression::falsy(),
 					}
-				},
+				}
 				YieldInstructionEnum::RandomVar(name) => {
 					println!("Random var instruction: {name}");
 					Expression::falsy()
-				},
+				}
 			},
 		}
 	}
@@ -441,10 +448,19 @@ impl ExpOrInstr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum YieldInstructionEnum {
-	Input{ quote: Expression, _type: Option<TokenData> },
-	Random{ method: RandomizerType, span: Option<(Expression, Expression)> },
+	Input {
+		quote: Expression,
+		_type: Option<TokenData>,
+	},
+	Random {
+		method: RandomizerType,
+		span: Option<(Expression, Expression)>,
+	},
 	RandomVar(String),
-	CallFunction { name: String, args: Vec<Expression> },
+	CallFunction {
+		name: String,
+		args: Vec<Expression>,
+	},
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -453,20 +469,54 @@ pub enum InstructionEnum {
 	Print(Vec<ExpOrInstr>),
 	Type(Vec<ExpOrInstr>),
 	Input(Vec<TokenData>),
-	Wait { amount: ExpOrInstr, unit: TimeUnit },
-	
-	// BLOCKS
-	Repeat 		{ scope_pointer: usize, repeat_count: ExpOrInstr },
-	For { from: ExpOrInstr, to: ExpOrInstr, step: Option<ExpOrInstr>, name: String, scope_pointer: usize },
-	WhileTrue 	{ scope_pointer: usize },
-	IfBlock { scope_pointer: usize, condition: ExpOrInstr },
-	ElifBlock { scope_pointer: usize, condition: ExpOrInstr },
-	ElseBlock { scope_pointer: usize },
-	Condition(ConditionBlock),
-	Function { name: String, args: Vec<ParameterData>, scope_pointer: usize },
-	// BLOCKS
+	Wait {
+		amount: ExpOrInstr,
+		unit: TimeUnit,
+	},
 
-	CallFunction { name: String, args: Vec<ExpOrInstr> },
+	// BLOCKS
+	Repeat {
+		scope_pointer: usize,
+		repeat_count: ExpOrInstr,
+	},
+	For {
+		from: ExpOrInstr,
+		to: ExpOrInstr,
+		step: Option<ExpOrInstr>,
+		name: String,
+		scope_pointer: usize,
+	},
+	ForIn {
+		name: String,
+		step: Option<ExpOrInstr>,
+		varname: String,
+		scope_pointer: usize,
+	},
+	WhileTrue {
+		scope_pointer: usize,
+	},
+	IfBlock {
+		scope_pointer: usize,
+		condition: ExpOrInstr,
+	},
+	ElifBlock {
+		scope_pointer: usize,
+		condition: ExpOrInstr,
+	},
+	ElseBlock {
+		scope_pointer: usize,
+	},
+	Condition(ConditionBlock),
+	Function {
+		name: String,
+		args: Vec<ParameterData>,
+		scope_pointer: usize,
+	},
+	// BLOCKS
+	CallFunction {
+		name: String,
+		args: Vec<ExpOrInstr>,
+	},
 	VariableDeclaration(String, ExpOrInstr, AssignmentMethod),
 	Break,
 	Continue,
@@ -477,47 +527,64 @@ impl InstructionEnum {
 	pub fn is_block(&self) -> bool {
 		matches!(
 			self,
-			InstructionEnum::IfBlock { .. } |
-			InstructionEnum::ElifBlock { .. } |
-			InstructionEnum::ElseBlock { .. } |
-			InstructionEnum::WhileTrue { .. } |
-			InstructionEnum::Repeat { .. }
+			InstructionEnum::IfBlock { .. }
+				| InstructionEnum::ElifBlock { .. }
+				| InstructionEnum::ElseBlock { .. }
+				| InstructionEnum::WhileTrue { .. }
+				| InstructionEnum::Repeat { .. }
 		)
 	}
 	pub fn as_block_action(&self) -> ScopeAction {
 		match self {
-			InstructionEnum::IfBlock { condition, ..} => ScopeAction::Condition( condition.clone() ),
-			InstructionEnum::ElifBlock { condition, ..} => ScopeAction::Condition( condition.clone() ),
-			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition( Expression::truthy().into() ),
+			InstructionEnum::IfBlock { condition, .. } => ScopeAction::Condition(condition.clone()),
+			InstructionEnum::ElifBlock { condition, .. } => ScopeAction::Condition(condition.clone()),
+			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition(Expression::truthy().into()),
 			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(repeat_count.clone()),
-			InstructionEnum::For { from, to, step, name, scope_pointer } => ScopeAction::For(from.clone(), to.clone(), step.clone(), name.clone()),
-			InstructionEnum::Function { name, args, scope_pointer } => ScopeAction::Function { name: name.clone(), args: args.clone() },
-			_ => panic!()
+			InstructionEnum::For {
+				from,
+				to,
+				step,
+				name,
+				scope_pointer,
+			} => ScopeAction::For(from.clone(), to.clone(), step.clone(), name.clone()),
+			InstructionEnum::ForIn {
+				name: variable,
+				step,
+				scope_pointer,
+				varname
+			} => ScopeAction::ForIn {
+				name: variable.clone(),
+				step: step.clone(),
+			},
+			InstructionEnum::Function { name, args, scope_pointer } => ScopeAction::Function {
+				name: name.clone(),
+				args: args.clone(),
+			},
+			_ => panic!(),
 		}
 	}
-	
+
 	pub fn as_expression(&self) -> ExpOrInstr {
 		match self {
-			InstructionEnum::IfBlock { condition, ..} => condition.clone(),
-			InstructionEnum::ElifBlock { condition, ..} => condition.clone(),
+			InstructionEnum::IfBlock { condition, .. } => condition.clone(),
+			InstructionEnum::ElifBlock { condition, .. } => condition.clone(),
 			InstructionEnum::ElseBlock { .. } => Expression::truthy().into(),
-			_ => panic!()
+			_ => panic!(),
 		}
 	}
-	
+
 	pub fn set_block_pointer(&mut self, pointer: usize) {
 		match self {
-			InstructionEnum::IfBlock { scope_pointer, .. } |
-			InstructionEnum::ElifBlock { scope_pointer, .. } |
-			InstructionEnum::ElseBlock { scope_pointer, .. } |
-			InstructionEnum::WhileTrue { scope_pointer } |
-			InstructionEnum::Function { scope_pointer, .. } |
-			InstructionEnum::For { scope_pointer, .. } |
-			InstructionEnum::Repeat { scope_pointer, .. } => {
-				*scope_pointer = pointer
-			}
-			_ => panic!()
+			InstructionEnum::IfBlock { scope_pointer, .. }
+			| InstructionEnum::ElifBlock { scope_pointer, .. }
+			| InstructionEnum::ElseBlock { scope_pointer, .. }
+			| InstructionEnum::WhileTrue { scope_pointer }
+			| InstructionEnum::Function { scope_pointer, .. }
+			| InstructionEnum::For { scope_pointer, .. }
+			| InstructionEnum::ForIn { scope_pointer, .. }
+			| InstructionEnum::Repeat { scope_pointer, .. } => *scope_pointer = pointer,
+			_ => panic!(),
 		}
 	}
 }

@@ -1,5 +1,7 @@
 use crate::{
-	features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum}, library::Types::RandomizerType, Debug, Print, PrintVec
+	Debug, Print, PrintVec,
+	features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum},
+	library::Types::RandomizerType,
 };
 use chumsky::prelude::*;
 
@@ -10,14 +12,11 @@ pub fn parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simpl
 		.ignore_then(random_variants())
 		.then(
 			Parsers::expression()
-			.then_ignore(just(TokenTable::Comma.asTokenData()))
-			.then(Parsers::expression())
-			.or_not()
+				.then_ignore(just(TokenTable::Comma.asTokenData()))
+				.then(Parsers::expression())
+				.or_not(),
 		)
-		.map(|(_type, span)| YieldInstructionEnum::Random{ 
-			method: _type,
-			span
-		});
+		.map(|(_type, span)| YieldInstructionEnum::Random { method: _type, span });
 
 	return Box::new(out);
 }

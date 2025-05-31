@@ -15,12 +15,11 @@ use crate::parsers::Parsers::Expression;
 use crate::util::ScopeManager::ScopeManager;
 
 use std::cell::RefCell;
-use std::ops::{Add, Div, Mul, Rem, Sub};
+use std::ops::{Add, Div, Index, Mul, Rem, Sub};
 use std::rc::Rc;
 use std::{fmt::Display, num::ParseFloatError, str::FromStr};
 
 use super::Error::TipHatası;
-
 
 static LETTERARRAY: &'static str = "abcçdefgğhıijklmnoöprsştuüvyzABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ";
 
@@ -117,6 +116,7 @@ pub enum ObjectType {
 	Boolean,
 	Variable,
 	Null,
+	Array,
 }
 
 impl Display for ObjectType {
@@ -127,6 +127,7 @@ impl Display for ObjectType {
 			ObjectType::Boolean => "Mantıksal",
 			ObjectType::Variable => "Değişken",
 			ObjectType::Null => "NIL",
+			ObjectType::Array => "Dizi",
 		};
 		write!(f, "{}", type_str)
 	}
@@ -138,6 +139,7 @@ pub enum Object {
 	Text(Text),
 	Bool(Boolean),
 	Variable(String),
+	Array(Array),
 	Null,
 }
 
@@ -149,6 +151,7 @@ impl Object {
 			Object::Bool(_) => ObjectType::Boolean,
 			Object::Variable(_) => ObjectType::Variable,
 			Object::Null => ObjectType::Null,
+			Object::Array(_) => ObjectType::Array,
 		}
 	}
 
@@ -189,6 +192,7 @@ impl Object {
 			Object::Bool(val) => val.value,
 			Object::Number(val) => val.value != 0.0,
 			Object::Text(val) => !val.value.is_empty(),
+			Object::Array(val) => !val.value.is_empty(),
 			Object::Variable(_) => true,
 			Object::Null => false,
 		}
@@ -278,6 +282,7 @@ impl Object {
 			Object::Bool(val) => Number::from(if val.value { 1.0 } else { 0.0 }),
 			Object::Variable(val) => Number::from(val.parse::<f64>().unwrap_or(0.0)),
 			Object::Null => Number::from(0.0),
+			Object::Array(val) => Number::from(if val.value.is_empty() { 0.0 } else { 1.0 }),
 		}
 	}
 
@@ -288,6 +293,7 @@ impl Object {
 			Object::Bool(val) => Text::from(val.value.to_string()),
 			Object::Variable(val) => Text::from(val.clone()),
 			Object::Null => Text::from("NIL".to_string()),
+			Object::Array(val) => Text::from(val.value.iter().map(|x| format!("{}", x)).collect::<Vec<_>>().join(", ")),
 		}
 	}
 
@@ -302,6 +308,18 @@ impl Object {
 			Object::Bool(val) => val.clone(),
 			Object::Variable(val) => Boolean::from(!val.remove_quotes().is_empty()),
 			Object::Null => Boolean::from(false),
+			Object::Array(val) => Boolean::from(val.value.is_empty()),
+		}
+	}
+
+	pub fn forceIntoArray(&self) -> Array {
+		match self {
+			Object::Number(val) => Array::from(vec![Object::Number(val.clone())]),
+			Object::Text(val) => Array::from(vec![Object::Text(val.clone())]),
+			Object::Bool(val) => Array::from(vec![Object::Bool(val.clone())]),
+			Object::Variable(val) => Array::from(vec![Object::Variable(val.clone())]),
+			Object::Null => Array::from(vec![]),
+			Object::Array(val) => val.clone(),
 		}
 	}
 
@@ -315,6 +333,7 @@ impl Object {
 			Object::Bool(val) => Err(()),
 			Object::Variable(val) => Err(()), // I mean, if you try to force a variable into a number, you have problems.
 			Object::Null => Err(()),
+			Object::Array(val) => Err(()),
 		}
 	}
 
@@ -325,6 +344,7 @@ impl Object {
 			Object::Bool(val) => Err(()),
 			Object::Variable(val) => Err(()),
 			Object::Null => Err(()),
+			Object::Array(val) => Err(()),
 		}
 	}
 
@@ -335,6 +355,7 @@ impl Object {
 			Object::Text(_) => Err(()),
 			Object::Variable(_) => Err(()),
 			Object::Null => Err(()),
+			Object::Array(val) => Err(()),
 		}
 	}
 }
@@ -554,6 +575,11 @@ pub struct Variable {
 	pub value: String,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Array {
+	pub value: Vec<Object>,
+}
+
 // ------------------------------------------ Trait Implements ------------------------------------------
 
 impl From<f64> for Object {
@@ -561,6 +587,7 @@ impl From<f64> for Object {
 		Object::Number(Number::from(value))
 	}
 }
+
 
 impl From<String> for Object {
 	fn from(value: String) -> Self {
@@ -577,6 +604,12 @@ impl From<&str> for Object {
 impl From<bool> for Object {
 	fn from(value: bool) -> Self {
 		Object::Bool(Boolean::from(value))
+	}
+}
+
+impl From<Vec<Object>> for Object {
+	fn from(value: Vec<Object>) -> Self {
+		Object::Array(Array { value })
 	}
 }
 
@@ -657,6 +690,110 @@ impl New<bool> for Boolean {
 	}
 }
 
+impl New<f64> for Array {
+	fn enum_from(value: f64) -> Object {
+		Object::Array(Self {
+			value: vec![Object::from(value)],
+		})
+	}
+
+	fn new() -> Self {
+		Self { value: vec![] }
+	}
+}
+
+impl New<String> for Array {
+	fn enum_from(value: String) -> Object {
+		Object::Array(Self {
+			value: vec![Object::from(value)],
+		})
+	}
+
+	fn new() -> Self {
+		Self { value: vec![] }
+	}
+}
+
+impl New<bool> for Array {
+	fn enum_from(value: bool) -> Object {
+		Object::Array(Self {
+			value: vec![Object::from(value)],
+		})
+	}
+
+	fn new() -> Self {
+		Self { value: vec![] }
+	}
+}
+
+impl From<Number> for Array {
+	fn from(value: Number) -> Self {
+		Array {
+			value: vec![Object::from(value)],
+		}
+	}
+}
+impl From<Text> for Array {
+	fn from(value: Text) -> Self {
+		Array {
+			value: vec![Object::from(value)],
+		}
+	}
+}
+impl From<Boolean> for Array {
+	fn from(value: Boolean) -> Self {
+		Array {
+			value: vec![Object::from(value)],
+		}
+	}
+}
+impl From<Variable> for Array {
+	fn from(value: Variable) -> Self {
+		Array {
+			value: vec![Object::from(value)],
+		}
+	}
+}
+impl From<Object> for Array {
+	fn from(value: Object) -> Self {
+		match value {
+			Object::Array(arr) => arr,
+			_ => Array::from(vec![value]),
+		}
+	}
+}
+impl From<Vec<Object>> for Array {
+	fn from(value: Vec<Object>) -> Self {
+		Array { value }
+	}
+}
+
+impl From<Number> for Object {
+	fn from(value: Number) -> Self {
+		Object::Number(value)
+	}
+}
+impl From<Text> for Object {
+	fn from(value: Text) -> Self {
+		Object::Text(value)
+	}
+}
+impl From<Boolean> for Object {
+	fn from(value: Boolean) -> Self {
+		Object::Bool(value)
+	}
+}
+impl From<Variable> for Object {
+	fn from(value: Variable) -> Self {
+		Object::Variable(value.value)
+	}
+}
+impl From<Array> for Object {
+	fn from(value: Array) -> Self {
+		Object::Array(value)
+	}
+}
+
 impl Display for Number {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let temp = format!("{}", self.value);
@@ -677,6 +814,19 @@ impl Display for Boolean {
 	}
 }
 
+impl Display for Array {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut elements = String::new();
+		for (i, el) in self.value.iter().enumerate() {
+			elements.push_str(&format!("{}", el));
+			if i < self.value.len() - 1 {
+				elements.push_str(", ");
+			}
+		}
+		write!(f, "[{}]", elements)
+	}
+}
+
 impl Display for Object {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -684,8 +834,26 @@ impl Display for Object {
 			Object::Number(val) => write!(f, "{}", val),
 			Object::Text(val) => write!(f, "{}", val),
 			Object::Variable(val) => write!(f, "{}", val),
+			Object::Array(val) => write!(f, "{}", val),
 			Object::Null => write!(f, "NIL"),
 		}
+	}
+}
+
+impl IntoIterator for Array {
+	type Item = Object;
+	type IntoIter = std::vec::IntoIter<Object>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.value.into_iter()
+	}
+}
+
+impl Index<usize> for Array {
+	type Output = Object;
+
+	fn index(&self, index: usize) -> &Self::Output {
+		&self.value[index]
 	}
 }
 
@@ -724,7 +892,7 @@ impl CutFromStart<TokenData> for Vec<TokenData> {
 pub enum RandomizerType {
 	Number,
 	Letter,
-	Boolean{ chance: Expression },
+	Boolean { chance: Expression },
 }
 
 #[derive(Debug, Clone, PartialEq)]

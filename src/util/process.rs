@@ -1,7 +1,7 @@
 use super::ScopeManager::{ConditionBlock, ConditionStructure, Scope};
 use crate::features::tokenizer::{AssignmentMethod, CheckTokenVec, ConditionBlockType, ExpOrInstr, RemoveQuotes};
 use crate::library::Error::{CokFazlaArguman, EksikArguman, FonksiyonBulunamadı, GirintiHatası, TokenHatası};
-use crate::library::Types::{Object, TimeUnit};
+use crate::library::Types::{Array, Number, Object, TimeUnit};
 use crate::parsers::Parsers::Expression;
 use crate::{
 	DebugVec, Print, PrintVec,
@@ -34,7 +34,11 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 	for line in block.clone() {
 		match line.clone() {
 			InstructionEnum::Print(expr) => {
-				PrintVec!(expr.iter().map(|x| x.resolve(scope_id, manager).evaluate(scope_id, manager)).collect::<Vec<_>>());
+				PrintVec!(
+					expr.iter()
+						.map(|x| x.resolve(scope_id, manager).evaluate(scope_id, manager))
+						.collect::<Vec<_>>()
+				);
 			}
 			InstructionEnum::Type(expr) => {
 				PrintVec!(
@@ -73,8 +77,9 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
 					Ok(BlockOutput::Break) => break,
 					Ok(BlockOutput::Continue) => continue,
-					Ok(BlockOutput::Return(..)) => {
-						panic!("Return statement encountered in a while loop, which is not allowed. Use 'break' or 'continue' instead.")
+					Ok(BlockOutput::Return(x)) => {
+						result = BlockOutput::Return(x);
+						break;
 					}
 					Ok(BlockOutput::None) => {}
 					Err(e) => {
@@ -83,12 +88,19 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				}
 			},
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => {
-				for _ in 0..(repeat_count.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64 {
+				for _ in 0..(repeat_count
+					.resolve(scope_id, manager)
+					.evaluate(scope_id, manager)
+					.expectToBeNumber(src.clone(), span)?
+					.value)
+					.floor() as i64
+				{
 					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
 						Ok(BlockOutput::Break) => break,
 						Ok(BlockOutput::Continue) => continue,
-						Ok(BlockOutput::Return(..)) => {
-							panic!("Return statement encountered in a repeat loop, which is not allowed. Use 'break' or 'continue' instead.")
+						Ok(BlockOutput::Return(x)) => {
+							result = BlockOutput::Return(x);
+							break;
 						}
 						Ok(BlockOutput::None) => {}
 						Err(e) => {
@@ -104,8 +116,18 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				name,
 				scope_pointer,
 			} => {
-				for index in ((from.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64
-					..(to.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64)
+				for index in ((from
+					.resolve(scope_id, manager)
+					.evaluate(scope_id, manager)
+					.expectToBeNumber(src.clone(), span)?
+					.value)
+					.floor() as i64
+					..(to
+						.resolve(scope_id, manager)
+						.evaluate(scope_id, manager)
+						.expectToBeNumber(src.clone(), span)?
+						.value)
+						.floor() as i64)
 					.step_by(
 						(step
 							.unwrap_or(Expression::from(Object::from(1f64)).into())
@@ -119,8 +141,9 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
 						Ok(BlockOutput::Break) => break,
 						Ok(BlockOutput::Continue) => continue,
-						Ok(BlockOutput::Return(..)) => {
-							panic!("Return statement encountered in a for loop, which is not allowed. Use 'break' or 'continue' instead.")
+						Ok(BlockOutput::Return(x)) => {
+							result = BlockOutput::Return(x);
+							break;
 						}
 						Ok(BlockOutput::None) => {}
 						Err(e) => {
@@ -129,13 +152,40 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 					}
 				}
 			}
+			InstructionEnum::ForIn { name, step, varname, scope_pointer } => {
+				let iterable: Array = manager.get_var(scope_pointer, name.clone()).expect(format!("No variable named {name} was found").as_str()).into();
+				let step = match step {
+					Some(thing) => thing.resolve(scope_id, manager).evaluate(scope_id, manager).forceIntoNumber(),
+					None => Number::from(1.0),
+				};
+
+				let mut i = 0;
+				while i < iterable.value.len() {
+					let x = &iterable[i];
+					manager.set_var(scope_pointer, varname.clone(), x.clone());
+					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
+						Ok(BlockOutput::Break) => break,
+						Ok(BlockOutput::Continue) => {
+							i += step.value as usize;
+							continue;
+						}
+						Ok(BlockOutput::Return(x)) => {
+							result = BlockOutput::Return(x);
+							break;
+						}
+						Ok(BlockOutput::None) => {}
+						Err(e) => {
+							return Err(e);
+						}
+					}
+					i += step.value as usize;
+				}
+			}
 			InstructionEnum::Function { name, args, scope_pointer } => {
 				let resolved_args = args.iter().map(|x| x.toResolved(scope_id, manager)).collect::<Vec<_>>();
 				manager.declare_function(scope_id, name.clone(), resolved_args, scope_pointer.clone());
 			}
-			InstructionEnum::CallFunction { name, args } => {
-				
-			}
+			InstructionEnum::CallFunction { name, args } => {}
 			InstructionEnum::Break => {
 				result = BlockOutput::Break;
 				break;
@@ -221,7 +271,11 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				}
 			}
 			InstructionEnum::Wait { amount, unit } => {
-				let wait_time = amount.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value;
+				let wait_time = amount
+					.resolve(scope_id, manager)
+					.evaluate(scope_id, manager)
+					.expectToBeNumber(src.clone(), span)?
+					.value;
 				let wait_unit = match unit {
 					TimeUnit::Millisecond => std::time::Duration::from_millis(wait_time as u64),
 					TimeUnit::Second => std::time::Duration::from_secs(wait_time as u64),

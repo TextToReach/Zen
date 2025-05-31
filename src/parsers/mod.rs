@@ -6,6 +6,7 @@ pub mod Define;
 pub mod Elif;
 pub mod Else;
 pub mod For;
+pub mod ForIn;
 pub mod Function;
 pub mod FunctionCall;
 pub mod FunctionCallYield;
@@ -21,8 +22,8 @@ pub mod WhileTrue;
 
 pub mod Parsers {
 	use super::{
-		Break, Continue, Define, Elif, Else, For, Function, FunctionCall, FunctionCallYield, If, Input, Print, Random, Repeat, Return, Type, Wait,
-		WhileTrue,
+		Break, Continue, Define, Elif, Else, For, ForIn, Function, FunctionCall, FunctionCallYield, If, Input, Print, Random, Repeat, Return, Type,
+		Wait, WhileTrue,
 	};
 	use crate::features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum};
 	use crate::library::Types::{Object, ParameterData, RandomizerType};
@@ -62,6 +63,7 @@ pub mod Parsers {
 				WithIndentation(WhileTrue::parser()),
 				WithIndentation(Function::parser()),
 				WithIndentation(For::parser()),
+				WithIndentation(ForIn::parser()),
 				WithoutIndentation(FunctionCall::parser()),
 				WithoutIndentation(Print::parser()),
 				WithoutIndentation(Define::parser()),
@@ -82,9 +84,9 @@ pub mod Parsers {
 
 	pub fn value() -> Box<dyn Parser<TokenData, ExpOrInstr, Error = Simple<TokenData>>> {
 		Box::new(
-			yield_instruction_parser().map(|x| ExpOrInstr::YieldInstruction(x)).or(
-				expression().map(|x| ExpOrInstr::Expression(x))
-			)
+			yield_instruction_parser()
+				.map(|x| ExpOrInstr::YieldInstruction(x))
+				.or(expression().map(|x| ExpOrInstr::Expression(x))),
 		)
 	}
 
@@ -230,13 +232,20 @@ pub mod Parsers {
 
 	pub fn object() -> Box<dyn Parser<TokenData, Expression, Error = Simple<TokenData>>> {
 		Box::new(
-			filter(|x: &TokenData| {
-				x.token == TokenTable::StringLiteral
-					|| x.token == TokenTable::NumberLiteral
-					|| x.token == TokenTable::BooleanLiteral
-					|| x.token == TokenTable::Identifier
+			recursive(|parser| {
+				filter(|x: &TokenData| {
+					x.token == TokenTable::StringLiteral
+						|| x.token == TokenTable::NumberLiteral
+						|| x.token == TokenTable::BooleanLiteral
+						|| x.token == TokenTable::Identifier
+				})
+				.map(|x| x.asObject())
+				.or(just(TokenTable::LSQBRACKET.asTokenData())
+					.ignore_then(parser.clone().separated_by(just(TokenTable::Comma.asTokenData())))
+					.then_ignore(just(TokenTable::RSQBRACKET.asTokenData()))
+					.map(|exprs| Object::from(exprs)))
 			})
-			.map(|x| Expression::from(x.asObject())),
+			.map(|x| x.into()),
 		)
 	}
 

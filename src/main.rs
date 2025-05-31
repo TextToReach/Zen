@@ -3,9 +3,9 @@
 mod features;
 mod library;
 mod parsers;
+mod stats;
 mod test;
 mod util;
-mod stats;
 
 use std::{
 	cell::RefCell,
@@ -65,13 +65,47 @@ enum Commands {
 
 	Stats {
 		#[arg(long, default_value_t = false)]
-		write: bool
+		write: bool,
 	},
 }
 
 fn run_zen_file(file: String, verbose: bool, printAst: bool, printPreprocessOutput: bool, noexecute: bool, strict: bool) -> miette::Result<()> {
 	let full_src: String;
-	let contents = match File::open(&file) { Ok(res) => { let lines = read_to_string(&file); match lines { Ok(lines) => { full_src = lines.clone(); let mut buffr = Vec::new(); for line in lines.lines() { buffr.push(line.to_string()); } buffr } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } } } Err(_) => { Throw( "Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(), library::Types::ZenError::GeneralError, None, None, Severity::High, ); unreachable!() } };
+	let contents = match File::open(&file) {
+		Ok(res) => {
+			let lines = read_to_string(&file);
+			match lines {
+				Ok(lines) => {
+					full_src = lines.clone();
+					let mut buffr = Vec::new();
+					for line in lines.lines() {
+						buffr.push(line.to_string());
+					}
+					buffr
+				}
+				Err(_) => {
+					Throw(
+						"Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(),
+						library::Types::ZenError::GeneralError,
+						None,
+						None,
+						Severity::High,
+					);
+					unreachable!()
+				}
+			}
+		}
+		Err(_) => {
+			Throw(
+				"Dosya okunmaya çalışırken bir hatayla karşılaşıldı.".to_owned(),
+				library::Types::ZenError::GeneralError,
+				None,
+				None,
+				Severity::High,
+			);
+			unreachable!()
+		}
+	};
 	process::index(&mut contents.clone(), full_src, verbose, strict, &file)?;
 
 	Ok(())

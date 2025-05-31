@@ -1,9 +1,13 @@
+use super::{
+	FunctionCallYield,
+	Parsers::{self, assignment_operator},
+};
+use crate::parsers::FunctionCall;
 use crate::{
-	features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable}, Debug, Print, PrintVec
+	Debug, Print, PrintVec,
+	features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable},
 };
 use chumsky::prelude::*;
-use crate::parsers::FunctionCall;
-use super::{FunctionCallYield, Parsers::{self, assignment_operator}};
 
 pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>> {
 	let out = filter(|x: &TokenData| x.token == TokenTable::Identifier)
