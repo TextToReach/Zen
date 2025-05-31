@@ -9,7 +9,7 @@ use super::Parsers::{self, Expression};
 pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>> {
 	let out = just(TokenTable::KeywordTip.asTokenData())
 		.then(
-			Parsers::expression().separated_by(
+			Parsers::value().separated_by(
 				just(TokenTable::Comma.asTokenData())
 			)
 		).map(|(_, b)| InstructionEnum::Type(b));

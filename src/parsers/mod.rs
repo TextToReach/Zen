@@ -8,18 +8,23 @@ pub mod Else;
 pub mod For;
 pub mod Function;
 pub mod FunctionCall;
+pub mod FunctionCallYield;
 pub mod If;
 pub mod Input;
 pub mod Print;
 pub mod Random;
 pub mod Repeat;
+pub mod Return;
 pub mod Type;
 pub mod Wait;
 pub mod WhileTrue;
 
 pub mod Parsers {
-	use super::{Break, Continue, Define, Elif, Else, For, Function, FunctionCall, If, Input, Print, Random, Repeat, Type, Wait, WhileTrue};
-	use crate::features::tokenizer::{AssignmentMethod, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum};
+	use super::{
+		Break, Continue, Define, Elif, Else, For, Function, FunctionCall, FunctionCallYield, If, Input, Print, Random, Repeat, Return, Type, Wait,
+		WhileTrue,
+	};
+	use crate::features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum};
 	use crate::library::Types::{Object, ParameterData, RandomizerType};
 	use crate::util::ScopeManager::ScopeManager;
 	use chumsky::prelude::*;
@@ -62,6 +67,7 @@ pub mod Parsers {
 				WithoutIndentation(Define::parser()),
 				WithoutIndentation(Break::parser()),
 				WithoutIndentation(Continue::parser()),
+				WithoutIndentation(Return::parser()),
 				WithoutIndentation(Type::parser()),
 				WithoutIndentation(Wait::parser()),
 			])
@@ -69,7 +75,17 @@ pub mod Parsers {
 	}
 
 	pub fn yield_instruction_parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simple<TokenData>>> {
-		Box::new(recursive(|instr_parser| choice([Input::parser(), Random::parser()])))
+		Box::new(recursive(|instr_parser| {
+			choice([Input::parser(), Random::parser(), FunctionCallYield::parser()])
+		}))
+	}
+
+	pub fn value() -> Box<dyn Parser<TokenData, ExpOrInstr, Error = Simple<TokenData>>> {
+		Box::new(
+			yield_instruction_parser().map(|x| ExpOrInstr::YieldInstruction(x)).or(
+				expression().map(|x| ExpOrInstr::Expression(x))
+			)
+		)
 	}
 
 	#[derive(Debug, Clone, PartialEq)]
@@ -133,7 +149,9 @@ pub mod Parsers {
 				}
 				Expression::Value(val) => {
 					if let Object::Variable(name) = *val.clone() {
-						manager.get_var(currentScope, name).unwrap()
+						manager
+							.get_var(currentScope, name.clone())
+							.unwrap_or_else(|| panic!("Variable {} not found in scope {}", name, currentScope))
 					} else {
 						*val.clone()
 					}
@@ -233,11 +251,9 @@ pub mod Parsers {
 				not_operator
 					.then(expr.clone())
 					.map(|(_, inner)| Expression::Not(Box::new(inner)))
-					.or(
-						just(TokenTable::MathOperatorSubtract.asTokenData())
-							.then(object())
-							.map(|(_, obj)| Expression::Sub(Box::new(Expression::from(0f64)), Box::new(obj))),
-					)
+					.or(just(TokenTable::MathOperatorSubtract.asTokenData())
+						.then(object())
+						.map(|(_, obj)| Expression::Sub(Box::new(Expression::from(0f64)), Box::new(obj))))
 					.or(object())
 					.or(expr.delimited_by(paren_left.clone(), paren_right.clone())),
 			);
@@ -348,7 +364,7 @@ pub mod Parsers {
 						.ignore_then(just(TokenTable::MathOperatorMod.asTokenData()))
 						.ignore_then(expression())
 						.then_ignore(just(TokenTable::RPAREN.asTokenData()))
-						.or_not()
+						.or_not(),
 				)
 				.map(|chance_opt| {
 					let chance = chance_opt.unwrap_or_else(|| Expression::from(50f64));

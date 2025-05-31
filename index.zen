@@ -1,0 +1,7 @@
+fonksiyon max(a: sayı, b: sayı)
+	eğer a >> b ise
+		döndür a
+	değilse
+		döndür b
+
+yazdır max(1, 5)

@@ -7,12 +7,11 @@ use chumsky::prelude::*;
 use super::Parsers::{self, Expression};
 
 pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>> {
-	let out = just(TokenTable::KeywordYazdır.asTokenData())
-		.then(
-			Parsers::value().separated_by(
-				just(TokenTable::Comma.asTokenData())
-			)
-		).map(|(_, b)| InstructionEnum::Print(b));
+	let out = just(TokenTable::KeywordDöndür.asTokenData())
+		.then(Parsers::expression())
+		.map(|(_, expr)| {
+			InstructionEnum::Return(expr.into())
+		});
 
 	return Box::new(out);
 }

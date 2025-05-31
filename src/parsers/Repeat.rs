@@ -6,7 +6,7 @@ use crate::{
 use chumsky::prelude::*;
 
 pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>> {
-	let out = Parsers::expression()
+	let out = Parsers::value()
 		.then_ignore(just(TokenTable::KeywordNDefaTekrarla.asTokenData())) 
 		.map(|a| InstructionEnum::Repeat{ repeat_count: a, scope_pointer: 0 } );
 

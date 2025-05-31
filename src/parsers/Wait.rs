@@ -1,6 +1,6 @@
 use crate::{
 	Debug, Print, PrintVec,
-	features::tokenizer::{AssignmentMethod, ExpressionOrYieldInstruction, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum},
+	features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum},
 	library::Types::{RandomizerType, TimeUnit},
 };
 use chumsky::prelude::*;
@@ -8,7 +8,7 @@ use chumsky::prelude::*;
 use super::Parsers::{self, assignment_operator, main_types, random_variants};
 
 pub fn parser() -> Box<dyn Parser<TokenData, InstructionEnum, Error = Simple<TokenData>>> {
-	let out = Parsers::expression()
+	let out = Parsers::value()
 		.then(
 			just(TokenTable::KeywordSalise.asTokenData()).to(TimeUnit::Millisecond)
 			.or(just(TokenTable::KeywordSaniye.asTokenData()).to(TimeUnit::Second))

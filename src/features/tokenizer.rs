@@ -89,6 +89,8 @@ pub enum TokenTable {
 	KeywordDevamEt,
 	#[token(r"durdur")]
 	KeywordDurdur,
+	#[token("döndür")]
+	KeywordDöndür,
 	#[token("tip")]
 	KeywordTip,
 	#[token("rastgele")]
@@ -350,23 +352,34 @@ impl ConditionBlockType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExpressionOrYieldInstruction {
+pub enum ExpOrInstr {
 	Expression(Expression),
-	Instruction(YieldInstructionEnum),
+	YieldInstruction(YieldInstructionEnum),
 }
 
-impl ExpressionOrYieldInstruction {
+impl From<Expression> for ExpOrInstr {
+	fn from(expr: Expression) -> Self {
+		ExpOrInstr::Expression(expr)
+	}
+}
+impl From<YieldInstructionEnum> for ExpOrInstr {
+	fn from(instr: YieldInstructionEnum) -> Self {
+		ExpOrInstr::YieldInstruction(instr)
+	}
+}
+
+impl ExpOrInstr {
 	pub fn is_expression(&self) -> bool {
-		matches!(self, ExpressionOrYieldInstruction::Expression(_))
+		matches!(self, ExpOrInstr::Expression(_))
 	}
 	pub fn is_instruction(&self) -> bool {
-		matches!(self, ExpressionOrYieldInstruction::Instruction(_))
+		matches!(self, ExpOrInstr::YieldInstruction(_))
 	}
 
 	pub fn resolve(&self, currentScope: usize, manager: &mut ScopeManager) -> Expression {
 		match self {
-			ExpressionOrYieldInstruction::Expression(expr) => expr.clone(),
-			ExpressionOrYieldInstruction::Instruction(instr) => match instr {
+			ExpOrInstr::Expression(expr) => expr.clone(),
+			ExpOrInstr::YieldInstruction(instr) => match instr {
 				YieldInstructionEnum::Input { quote, _type } => {
 					let out = Object::from(Input!(quote.clone().evaluate(currentScope, manager)));
 					if _type.is_none() {
@@ -403,6 +416,20 @@ impl ExpressionOrYieldInstruction {
 					// println!("Random instruction: {method:#?} from: {from:#?} to: {to:#?} with result: {out:#?}");
 					out
 				},
+				YieldInstructionEnum::CallFunction { name, args } => {
+					let mut args_evaluated = Vec::new();
+					for arg in args {
+						args_evaluated.push(Expression::from(arg.evaluate(currentScope, manager)));
+					}
+					match manager.call_function(currentScope, name, args_evaluated) {
+						Some(result) => {
+							Expression::from(result)
+						},
+						None => {
+							Expression::falsy()
+						}
+					}
+				},
 				YieldInstructionEnum::RandomVar(name) => {
 					println!("Random var instruction: {name}");
 					Expression::falsy()
@@ -416,32 +443,34 @@ impl ExpressionOrYieldInstruction {
 pub enum YieldInstructionEnum {
 	Input{ quote: Expression, _type: Option<TokenData> },
 	Random{ method: RandomizerType, span: Option<(Expression, Expression)> },
-	RandomVar(String)
+	RandomVar(String),
+	CallFunction { name: String, args: Vec<Expression> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
 	NoOp,
-	Print(Vec<Expression>),
-	Type(Vec<Expression>),
+	Print(Vec<ExpOrInstr>),
+	Type(Vec<ExpOrInstr>),
 	Input(Vec<TokenData>),
-	Wait { amount: Expression, unit: TimeUnit },
+	Wait { amount: ExpOrInstr, unit: TimeUnit },
 	
 	// BLOCKS
-	Repeat 		{ scope_pointer: usize, repeat_count: Expression },
-	For { from: Expression, to: Expression, step: Option<Expression>, name: String, scope_pointer: usize },
+	Repeat 		{ scope_pointer: usize, repeat_count: ExpOrInstr },
+	For { from: ExpOrInstr, to: ExpOrInstr, step: Option<ExpOrInstr>, name: String, scope_pointer: usize },
 	WhileTrue 	{ scope_pointer: usize },
-	IfBlock { scope_pointer: usize, condition: Expression },
-	ElifBlock { scope_pointer: usize, condition: Expression },
+	IfBlock { scope_pointer: usize, condition: ExpOrInstr },
+	ElifBlock { scope_pointer: usize, condition: ExpOrInstr },
 	ElseBlock { scope_pointer: usize },
 	Condition(ConditionBlock),
 	Function { name: String, args: Vec<ParameterData>, scope_pointer: usize },
 	// BLOCKS
 
-	CallFunction { name: String, args: Vec<Expression> },
-	VariableDeclaration(String, ExpressionOrYieldInstruction, AssignmentMethod),
+	CallFunction { name: String, args: Vec<ExpOrInstr> },
+	VariableDeclaration(String, ExpOrInstr, AssignmentMethod),
 	Break,
-	Continue
+	Continue,
+	Return(ExpOrInstr),
 }
 
 impl InstructionEnum {
@@ -459,7 +488,7 @@ impl InstructionEnum {
 		match self {
 			InstructionEnum::IfBlock { condition, ..} => ScopeAction::Condition( condition.clone() ),
 			InstructionEnum::ElifBlock { condition, ..} => ScopeAction::Condition( condition.clone() ),
-			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition( Expression::truthy() ),
+			InstructionEnum::ElseBlock { .. } => ScopeAction::Condition( Expression::truthy().into() ),
 			InstructionEnum::WhileTrue { .. } => ScopeAction::WhileTrue,
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => ScopeAction::Repeat(repeat_count.clone()),
 			InstructionEnum::For { from, to, step, name, scope_pointer } => ScopeAction::For(from.clone(), to.clone(), step.clone(), name.clone()),
@@ -468,11 +497,11 @@ impl InstructionEnum {
 		}
 	}
 	
-	pub fn as_expression(&self) -> Expression {
+	pub fn as_expression(&self) -> ExpOrInstr {
 		match self {
 			InstructionEnum::IfBlock { condition, ..} => condition.clone(),
 			InstructionEnum::ElifBlock { condition, ..} => condition.clone(),
-			InstructionEnum::ElseBlock { .. } => Expression::truthy(),
+			InstructionEnum::ElseBlock { .. } => Expression::truthy().into(),
 			_ => panic!()
 		}
 	}

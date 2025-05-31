@@ -1,5 +1,5 @@
 use crate::{
-	features::tokenizer::{AssignmentMethod, ExpressionOrYieldInstruction, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum}, library::Types::RandomizerType, Debug, Print, PrintVec
+	features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum}, library::Types::RandomizerType, Debug, Print, PrintVec
 };
 use chumsky::prelude::*;
 

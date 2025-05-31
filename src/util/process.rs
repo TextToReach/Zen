@@ -1,5 +1,5 @@
 use super::ScopeManager::{ConditionBlock, ConditionStructure, Scope};
-use crate::features::tokenizer::{AssignmentMethod, CheckTokenVec, ConditionBlockType, ExpressionOrYieldInstruction, RemoveQuotes};
+use crate::features::tokenizer::{AssignmentMethod, CheckTokenVec, ConditionBlockType, ExpOrInstr, RemoveQuotes};
 use crate::library::Error::{CokFazlaArguman, EksikArguman, FonksiyonBulunamadı, GirintiHatası, TokenHatası};
 use crate::library::Types::{Object, TimeUnit};
 use crate::parsers::Parsers::Expression;
@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 pub enum BlockOutput {
 	Break,
 	Continue,
+	Return(Object),
 	None,
 }
 
@@ -33,10 +34,15 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 	for line in block.clone() {
 		match line.clone() {
 			InstructionEnum::Print(expr) => {
-				PrintVec!(expr.iter().map(|x| x.evaluate(scope_id, manager)).collect::<Vec<_>>());
+				PrintVec!(expr.iter().map(|x| x.resolve(scope_id, manager).evaluate(scope_id, manager)).collect::<Vec<_>>());
 			}
 			InstructionEnum::Type(expr) => {
-				PrintVec!(expr.iter().map(|x| x.evaluate(scope_id, manager)).map(|x| format!("Değer: {}, Tip: {}", x, x.get_type())).collect::<Vec<_>>());
+				PrintVec!(
+					expr.iter()
+						.map(|x| x.resolve(scope_id, manager).evaluate(scope_id, manager))
+						.map(|x| format!("Değer: {}, Tip: {}", x, x.get_type()))
+						.collect::<Vec<_>>()
+				);
 			}
 			InstructionEnum::VariableDeclaration(name, value, method) => {
 				let evaluated_value = value.resolve(scope_id, manager).evaluate(scope_id, manager);
@@ -67,6 +73,9 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
 					Ok(BlockOutput::Break) => break,
 					Ok(BlockOutput::Continue) => continue,
+					Ok(BlockOutput::Return(..)) => {
+						panic!("Return statement encountered in a while loop, which is not allowed. Use 'break' or 'continue' instead.")
+					}
 					Ok(BlockOutput::None) => {}
 					Err(e) => {
 						return Err(e);
@@ -74,10 +83,13 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				}
 			},
 			InstructionEnum::Repeat { repeat_count, scope_pointer } => {
-				for _ in 0..(repeat_count.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64 {
+				for _ in 0..(repeat_count.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64 {
 					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
 						Ok(BlockOutput::Break) => break,
 						Ok(BlockOutput::Continue) => continue,
+						Ok(BlockOutput::Return(..)) => {
+							panic!("Return statement encountered in a repeat loop, which is not allowed. Use 'break' or 'continue' instead.")
+						}
 						Ok(BlockOutput::None) => {}
 						Err(e) => {
 							return Err(e);
@@ -92,11 +104,12 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				name,
 				scope_pointer,
 			} => {
-				for index in ((from.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64
-					..(to.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64)
+				for index in ((from.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64
+					..(to.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value).floor() as i64)
 					.step_by(
 						(step
-							.unwrap_or(Expression::from(Object::from(1f64)))
+							.unwrap_or(Expression::from(Object::from(1f64)).into())
+							.resolve(scope_id, manager)
 							.evaluate(scope_id, manager)
 							.expectToBeNumber(src.clone(), span)?
 							.value)
@@ -106,6 +119,9 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 					match ExecuteBlock(scope_pointer, manager, src.clone(), span) {
 						Ok(BlockOutput::Break) => break,
 						Ok(BlockOutput::Continue) => continue,
+						Ok(BlockOutput::Return(..)) => {
+							panic!("Return statement encountered in a for loop, which is not allowed. Use 'break' or 'continue' instead.")
+						}
 						Ok(BlockOutput::None) => {}
 						Err(e) => {
 							return Err(e);
@@ -118,41 +134,7 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				manager.declare_function(scope_id, name.clone(), resolved_args, scope_pointer.clone());
 			}
 			InstructionEnum::CallFunction { name, args } => {
-				let function_scope = manager.get_function(scope_id, name.clone()).ok_or_else(|| FonksiyonBulunamadı {
-					src: src.clone(),
-					bad_bit: span,
-				})?;
-				let resolved_args = args.iter().map(|x| x.evaluate(scope_id, manager)).collect::<Vec<_>>();
-				let funcdef_args = &function_scope.args;
-				if resolved_args.len() > funcdef_args.len() {
-					return Err(CokFazlaArguman {
-						src,
-						bad_bit: span,
-						expected: Some(funcdef_args.len()),
-						got: Some(resolved_args.len()),
-					})?;
-				}
-				for (i, param) in funcdef_args.iter().enumerate() {
-					let value = if i < resolved_args.len() {
-						resolved_args[i].clone()
-					} else if let Some(default) = &param.default_value {
-						default.clone()
-					} else {
-						return Err(EksikArguman {
-							src,
-							bad_bit: span,
-							expected: Some(param.name.clone()),
-						})?;
-					};
-
-					// Type checking
-					if let Some(expected_type) = &param.data_type {
-						value.expectToBe(expected_type.clone(), src.clone(), span)?
-					}
-
-					manager.set_var(function_scope.scope_pointer, param.name.clone(), value);
-				}
-				ExecuteBlock(function_scope.scope_pointer, manager, src.clone(), span)?;
+				
 			}
 			InstructionEnum::Break => {
 				result = BlockOutput::Break;
@@ -160,6 +142,11 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 			}
 			InstructionEnum::Continue => {
 				result = BlockOutput::Continue;
+				break;
+			}
+			InstructionEnum::Return(expr) => {
+				let return_value = expr.resolve(scope_id, manager).evaluate(scope_id, manager);
+				result = BlockOutput::Return(return_value);
 				break;
 			}
 			InstructionEnum::Condition(condition) => {
@@ -172,6 +159,10 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 						}
 						Ok(BlockOutput::Continue) => {
 							result = BlockOutput::Continue;
+							break;
+						}
+						Ok(BlockOutput::Return(x)) => {
+							result = BlockOutput::Return(x);
 							break;
 						}
 						Ok(BlockOutput::None) => {}
@@ -191,6 +182,10 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 								}
 								Ok(BlockOutput::Continue) => {
 									result = BlockOutput::Continue;
+									break;
+								}
+								Ok(BlockOutput::Return(x)) => {
+									result = BlockOutput::Return(x);
 									break;
 								}
 								Ok(BlockOutput::None) => {}
@@ -213,6 +208,10 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 								result = BlockOutput::Continue;
 								break;
 							}
+							Ok(BlockOutput::Return(x)) => {
+								result = BlockOutput::Return(x);
+								break;
+							}
 							Ok(BlockOutput::None) => {}
 							Err(e) => {
 								return Err(e);
@@ -222,7 +221,7 @@ pub fn ExecuteBlock(scope_id: usize, manager: &mut ScopeManager, src: NamedSourc
 				}
 			}
 			InstructionEnum::Wait { amount, unit } => {
-				let wait_time = amount.evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value;
+				let wait_time = amount.resolve(scope_id, manager).evaluate(scope_id, manager).expectToBeNumber(src.clone(), span)?.value;
 				let wait_unit = match unit {
 					TimeUnit::Millisecond => std::time::Duration::from_millis(wait_time as u64),
 					TimeUnit::Second => std::time::Duration::from_secs(wait_time as u64),
@@ -274,17 +273,13 @@ pub fn ProcessLine(
 	if instr.0.indent {
 		let mut instr_enum = instr.clone().1;
 		let new_scope = match instr_enum {
-			InstructionEnum::IfBlock { .. } |
-			InstructionEnum::ElifBlock { .. } |
-			InstructionEnum::ElseBlock { .. } |
-			InstructionEnum::For { .. } |
-			InstructionEnum::WhileTrue { .. } |
-			InstructionEnum::Repeat { .. } => {
-				manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action()))
-			}
-			InstructionEnum::Function { .. } => {
-				manager.create_isolated_scope(*current_scope_id, Some(instr_enum.as_block_action()))
-			}
+			InstructionEnum::IfBlock { .. }
+			| InstructionEnum::ElifBlock { .. }
+			| InstructionEnum::ElseBlock { .. }
+			| InstructionEnum::For { .. }
+			| InstructionEnum::WhileTrue { .. }
+			| InstructionEnum::Repeat { .. } => manager.create_transparent_scope(*current_scope_id, Some(instr_enum.as_block_action())),
+			InstructionEnum::Function { .. } => manager.create_isolated_scope(*current_scope_id, Some(instr_enum.as_block_action())),
 			_ => manager.create_scope(Some(*current_scope_id), Some(instr_enum.as_block_action())),
 		};
 
@@ -292,28 +287,30 @@ pub fn ProcessLine(
 			InstructionEnum::IfBlock { .. } => {
 				instr_enum = InstructionEnum::Condition(ConditionBlock::new(ConditionStructure {
 					scope_pointer: new_scope,
-					condition: instr_enum.as_expression(),
+					condition: instr_enum.as_expression().resolve(*current_scope_id, manager),
 				}));
 				manager.push_code_to_scope(*current_scope_id, &instr_enum);
 				*current_scope_id = new_scope;
 			}
 			InstructionEnum::ElifBlock { .. } => {
+				let resolved_condition = instr_enum.as_expression().resolve(*current_scope_id, manager);
 				if let Some(last_instr) = manager.get_scope_mut(*current_scope_id).unwrap().block.last_mut() {
 					if let InstructionEnum::Condition(con) = last_instr {
 						con.push_elif(ConditionStructure {
 							scope_pointer: new_scope,
-							condition: instr_enum.as_expression(),
+							condition: resolved_condition,
 						});
 					}
 				}
 				*current_scope_id = new_scope;
 			}
 			InstructionEnum::ElseBlock { .. } => {
+				let resolved_condition = instr_enum.as_expression().resolve(*current_scope_id, manager);
 				if let Some(last_instr) = manager.get_scope_mut(*current_scope_id).unwrap().block.last_mut() {
 					if let InstructionEnum::Condition(con) = last_instr {
 						con.push_else(ConditionStructure {
 							scope_pointer: new_scope,
-							condition: instr_enum.as_expression(),
+							condition: resolved_condition,
 						});
 					}
 				}
