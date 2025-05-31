@@ -18,6 +18,8 @@ pub enum TokenTable {
 
 	#[token("?")]
 	QuestionMark,
+	#[token("!")]
+	ExclamationMark,
 
 	#[token("eğer")]
 	KeywordEğer,
@@ -34,6 +36,8 @@ pub enum TokenTable {
 	KeywordMetin,
 	#[token("mantıksal")]
 	KeywordMantıksal,
+	#[token("ihtimal")]
+	KeywordIhtimal,
 	#[token("harf")]
 	KeywordHarf,
 
@@ -376,18 +380,24 @@ impl ExpressionOrYieldInstruction {
 						}
 					}
 				},
-				YieldInstructionEnum::Random { method, from, to } => {
+				YieldInstructionEnum::Random { method, span } => {
 					let out = match method {
 						RandomizerType::Number => {
-							let from_val = from.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
-							let to_val = to.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
+							let span = span.clone().unwrap_or(( Expression::from(0.0), Expression::from(1.0) ));
+							let from_val = span.0.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
+							let to_val = span.1.evaluate(currentScope, manager).forceIntoNumber().value.floor() as i64;
 							let mut rng = rand::rng();
 							let rand_num = rng.random_range(from_val..=to_val);
 							Expression::from(rand_num as f64)
 						}
 						RandomizerType::Letter => {
 							panic!("Random letter generation is not implemented yet.");
-						},
+						}
+						RandomizerType::Boolean { chance } => {
+							let mut rng = rand::rng();
+							let rand_bool = rng.random_bool((chance.evaluate(currentScope, manager).forceIntoNumber().value / 100.0).clamp(0.0, 1.0));
+							Expression::from(rand_bool)
+						}
 
 					};
 					// println!("Random instruction: {method:#?} from: {from:#?} to: {to:#?} with result: {out:#?}");
@@ -405,7 +415,7 @@ impl ExpressionOrYieldInstruction {
 #[derive(Debug, Clone, PartialEq)]
 pub enum YieldInstructionEnum {
 	Input{ quote: Expression, _type: Option<TokenData> },
-	Random{ method: RandomizerType, from: Expression, to: Expression },
+	Random{ method: RandomizerType, span: Option<(Expression, Expression)> },
 	RandomVar(String)
 }
 

@@ -724,6 +724,7 @@ impl CutFromStart<TokenData> for Vec<TokenData> {
 pub enum RandomizerType {
 	Number,
 	Letter,
+	Boolean{ chance: Expression },
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -5,17 +5,17 @@ pub mod Continue;
 pub mod Define;
 pub mod Elif;
 pub mod Else;
+pub mod For;
 pub mod Function;
 pub mod FunctionCall;
 pub mod If;
-pub mod Print;
-pub mod Repeat;
-pub mod WhileTrue;
-pub mod For;
 pub mod Input;
-pub mod Type;
+pub mod Print;
 pub mod Random;
+pub mod Repeat;
+pub mod Type;
 pub mod Wait;
+pub mod WhileTrue;
 
 pub mod Parsers {
 	use super::{Break, Continue, Define, Elif, Else, For, Function, FunctionCall, If, Input, Print, Random, Repeat, Type, Wait, WhileTrue};
@@ -69,17 +69,13 @@ pub mod Parsers {
 	}
 
 	pub fn yield_instruction_parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simple<TokenData>>> {
-		Box::new(recursive(|instr_parser| {
-			choice([
-				Input::parser(),
-				Random::parser()
-			])
-		}))
+		Box::new(recursive(|instr_parser| choice([Input::parser(), Random::parser()])))
 	}
 
 	#[derive(Debug, Clone, PartialEq)]
 	pub enum Expression {
 		Value(Box<Object>),
+		Not(Box<Expression>),
 		Add(Box<Expression>, Box<Expression>),
 		Sub(Box<Expression>, Box<Expression>),
 		Mul(Box<Expression>, Box<Expression>),
@@ -131,6 +127,10 @@ pub mod Parsers {
 
 		pub fn evaluate(&self, currentScope: usize, manager: &mut ScopeManager) -> Object {
 			match self {
+				Expression::Not(inner) => {
+					let inner_value = inner.evaluate(currentScope, manager);
+					Object::from(!inner_value.isTruthy())
+				}
 				Expression::Value(val) => {
 					if let Object::Variable(name) = *val.clone() {
 						manager.get_var(currentScope, name).unwrap()
@@ -205,6 +205,7 @@ pub mod Parsers {
 				Expression::GreaterThanOrEqual(lhs, rhs) => write!(f, "({} >= {})", lhs, rhs),
 				Expression::Equal(lhs, rhs) => write!(f, "({} == {})", lhs, rhs),
 				Expression::NotEqual(lhs, rhs) => write!(f, "({} != {})", lhs, rhs),
+				Expression::Not(inner) => write!(f, "(!{})", inner),
 			}
 		}
 	}
@@ -226,12 +227,19 @@ pub mod Parsers {
 		let (paren_left, paren_right) = parens();
 
 		let expr = recursive(|expr| {
+			let not_operator = just(TokenTable::ExclamationMark.asTokenData());
+
 			let atom = Rc::new(
-				just(TokenTable::MathOperatorSubtract.asTokenData())
-					.then(object())
-					.map(|(_, obj)| Expression::Sub(Box::new(Expression::from(0f64)), Box::new(obj)))
+				not_operator
+					.then(expr.clone())
+					.map(|(_, inner)| Expression::Not(Box::new(inner)))
+					.or(
+						just(TokenTable::MathOperatorSubtract.asTokenData())
+							.then(object())
+							.map(|(_, obj)| Expression::Sub(Box::new(Expression::from(0f64)), Box::new(obj))),
+					)
 					.or(object())
-					.or(expr.delimited_by(paren_left, paren_right))
+					.or(expr.delimited_by(paren_left.clone(), paren_right.clone())),
 			);
 
 			let mul_operator = just(TokenTable::MathOperatorMultiply.asTokenData())
@@ -252,17 +260,17 @@ pub mod Parsers {
 
 			let mul = atom
 				.clone()
-				.then(mul_operator.clone().then(atom).repeated())
+				.then(mul_operator.clone().then(atom.clone()).repeated())
 				.foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
 
 			let add = mul
 				.clone()
-				.then(add_operator.clone().then(mul).repeated())
+				.then(add_operator.clone().then(mul.clone()).repeated())
 				.foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
 
 			let comparison = add
 				.clone()
-				.then(comparison_operator.then(add).repeated())
+				.then(comparison_operator.then(add.clone()).repeated())
 				.foldl(|lhs, (op, rhs)| op.toOp()(Box::new(lhs), Box::new(rhs)));
 
 			comparison
@@ -321,11 +329,7 @@ pub mod Parsers {
 			identifier()
 				.then_ignore(just(TokenTable::Colon.asTokenData()))
 				.then(main_types()) // TODO: Remove this and add support for object and such. For now this only supports the main types.
-				.then(
-					just(TokenTable::AssignmentOperatorSet.asTokenData())
-					.ignore_then(expression())
-					.or_not()
-				)
+				.then(just(TokenTable::AssignmentOperatorSet.asTokenData()).ignore_then(expression()).or_not())
 				.map(|((name, type_), default)| ParameterData {
 					name: name.asIdentifier(),
 					data_type: Some(type_),
@@ -335,11 +339,22 @@ pub mod Parsers {
 	}
 
 	pub fn random_variants() -> Box<dyn Parser<TokenData, RandomizerType, Error = Simple<TokenData>>> {
-		Box::new(
-			choice([
-				just(TokenTable::KeywordSayı.asTokenData()).to(RandomizerType::Number),
-				just(TokenTable::KeywordHarf.asTokenData()).to(RandomizerType::Letter),
-			])
-		)
+		Box::new(choice([
+			just(TokenTable::KeywordSayı.asTokenData()).to(RandomizerType::Number).boxed(),
+			just(TokenTable::KeywordHarf.asTokenData()).to(RandomizerType::Letter).boxed(),
+			just(TokenTable::KeywordIhtimal.asTokenData())
+				.ignore_then(
+					just(TokenTable::LPAREN.asTokenData())
+						.ignore_then(just(TokenTable::MathOperatorMod.asTokenData()))
+						.ignore_then(expression())
+						.then_ignore(just(TokenTable::RPAREN.asTokenData()))
+						.or_not()
+				)
+				.map(|chance_opt| {
+					let chance = chance_opt.unwrap_or_else(|| Expression::from(50f64));
+					RandomizerType::Boolean { chance }
+				})
+				.boxed(),
+		]))
 	}
 }
