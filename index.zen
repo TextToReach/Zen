@@ -1,3 +1,6 @@
-a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, "sa", evet, hayır]
-a içinde 2 artarak dolan: x
-	yazdır x
+// a = 1 + 2
+// x = "x: " + girdi "adın ne: "
+// yazdır "Adam", x
+
+a = [1, 2, 3]
+yazdır a{0 + 1}

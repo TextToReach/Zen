@@ -1,5 +1,5 @@
 use super::ScopeManager::{ConditionBlock, ConditionStructure, Scope};
-use crate::features::tokenizer::{AssignmentMethod, CheckTokenVec, ConditionBlockType, ExpOrInstr, RemoveQuotes};
+use crate::features::tokenizer::{AssignmentMethod, CheckTokenVec, ConditionBlockType, Atom, RemoveQuotes};
 use crate::library::Error::{CokFazlaArguman, EksikArguman, FonksiyonBulunamadı, GirintiHatası, TokenHatası};
 use crate::library::Types::{Array, Number, Object, TimeUnit};
 use crate::parsers::Parsers::Expression;

@@ -1,0 +1,1 @@
+1. Yield instructions cannot have another yield instruction as any of it's arguments. For example a random instruction cannot have the range of some 2 other random numbers in the same line. The lines must be seperated at least. Or else, this creates a stack overflow because of the recursive pattern.

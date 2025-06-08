@@ -4,12 +4,12 @@ use crate::{
 };
 use chumsky::prelude::*;
 
-use super::Parsers::{self, Expression};
+use super::super::Parsers::{self, Expression};
 
 pub fn parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simple<TokenData>>> {
 	let out = Parsers::identifier()
 		.then_ignore(just(TokenTable::LPAREN.asTokenData()))
-		.then(Parsers::expression().separated_by(just(TokenTable::Comma.asTokenData())).allow_trailing())
+		.then(Parsers::atomic().separated_by(just(TokenTable::Comma.asTokenData())).allow_trailing())
 		.then_ignore(just(TokenTable::RPAREN.asTokenData()))
 		.map(|(name, args)| YieldInstructionEnum::CallFunction {
 			name: name.asIdentifier(),

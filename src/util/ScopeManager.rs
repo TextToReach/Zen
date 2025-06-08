@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-	features::tokenizer::{ExpOrInstr, InstructionEnum, TokenData},
+	features::tokenizer::{Atom, InstructionEnum, TokenData},
 	library::{
 		Error::{CokFazlaArguman, EksikArguman, FonksiyonBulunamadı},
 		Types::{Boolean, Function, Object, ParameterData, ResolvedParameterData},
@@ -16,11 +16,11 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum ScopeAction {
 	RootScope,
-	Repeat(ExpOrInstr),
-	For(ExpOrInstr, ExpOrInstr, Option<ExpOrInstr>, String),
-	ForIn{ name: String, step: Option<ExpOrInstr> },
+	Repeat(Atom),
+	For(Atom, Atom, Option<Atom>, String),
+	ForIn{ name: String, step: Option<Atom> },
 	WhileTrue,
-	Condition(ExpOrInstr),
+	Condition(Atom),
 	Function { name: String, args: Vec<ParameterData> },
 }
 
@@ -348,7 +348,7 @@ impl ScopeManager {
 		}
 		None
 	}
-
+	
 	pub fn reset_scope_vars(&mut self, scope_id: usize) {
 		if let Some(scope) = self.get_scope_mut(scope_id) {
 			scope.variables.clear();

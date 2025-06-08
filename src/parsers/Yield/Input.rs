@@ -1,10 +1,10 @@
 use crate::{
 	Debug, Print, PrintVec,
-	features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum},
+	features::tokenizer::{AssignmentMethod, Atom, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum},
 };
 use chumsky::prelude::*;
 
-use super::Parsers::{self, assignment_operator, main_types};
+use super::super::Parsers::{self, assignment_operator, main_types};
 
 pub fn parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simple<TokenData>>> {
 	let out = just(TokenTable::KeywordGirdi.asTokenData())
@@ -14,7 +14,7 @@ pub fn parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simpl
 				.then_ignore(just(TokenTable::RPAREN.asTokenData()))
 				.or_not(),
 		)
-		.then(Parsers::expression())
+		.then(Parsers::atomic())
 		.map(|(_type, quote)| YieldInstructionEnum::Input { _type, quote });
 
 	return Box::new(out);

@@ -364,34 +364,40 @@ impl ConditionBlockType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExpOrInstr {
+pub enum Atom {
 	Expression(Expression),
 	YieldInstruction(YieldInstructionEnum),
 }
 
-impl From<Expression> for ExpOrInstr {
-	fn from(expr: Expression) -> Self {
-		ExpOrInstr::Expression(expr)
-	}
-}
-impl From<YieldInstructionEnum> for ExpOrInstr {
-	fn from(instr: YieldInstructionEnum) -> Self {
-		ExpOrInstr::YieldInstruction(instr)
+impl From<YieldInstructionEnum> for Box<Atom> {
+	fn from(value: YieldInstructionEnum) -> Self {
+		Box::new(value.into())
 	}
 }
 
-impl ExpOrInstr {
+impl From<Expression> for Atom {
+	fn from(expr: Expression) -> Self {
+		Atom::Expression(expr)
+	}
+}
+impl From<YieldInstructionEnum> for Atom {
+	fn from(instr: YieldInstructionEnum) -> Self {
+		Atom::YieldInstruction(instr)
+	}
+}
+
+impl Atom {
 	pub fn is_expression(&self) -> bool {
-		matches!(self, ExpOrInstr::Expression(_))
+		matches!(self, Atom::Expression(_))
 	}
 	pub fn is_instruction(&self) -> bool {
-		matches!(self, ExpOrInstr::YieldInstruction(_))
+		matches!(self, Atom::YieldInstruction(_))
 	}
 
 	pub fn resolve(&self, currentScope: usize, manager: &mut ScopeManager) -> Expression {
 		match self {
-			ExpOrInstr::Expression(expr) => expr.clone(),
-			ExpOrInstr::YieldInstruction(instr) => match instr {
+			Atom::Expression(expr) => expr.clone(),
+			Atom::YieldInstruction(instr) => match instr {
 				YieldInstructionEnum::Input { quote, _type } => {
 					let out = Object::from(Input!(quote.clone().evaluate(currentScope, manager)));
 					if _type.is_none() {
@@ -441,6 +447,40 @@ impl ExpOrInstr {
 					println!("Random var instruction: {name}");
 					Expression::falsy()
 				}
+				YieldInstructionEnum::Index(name, val) => {
+					println!("hi");
+					let index_val = val.resolve(currentScope, manager);
+					let index = index_val.evaluate(currentScope, manager).forceIntoNumber().value as i64;
+					let obj = manager.get_var(currentScope, name.clone());
+					if obj.is_none() {
+						panic!("Variable {name} not found in scope {currentScope}");
+					}
+					let obj = obj.unwrap();
+					match obj {
+						Object::Text(text) => {
+							let len = text.value.len() as i64;
+							let i = if index < 0 { len + index } else { index };
+							if i < 0 || i >= len {
+								println!("Index out of bounds: {i} for {len}");
+								return Expression::falsy();
+							}
+							Expression::from(text.value.chars().nth(i as usize).unwrap().to_string())
+						}
+						Object::Array(list) => {
+							let len = list.value.len() as i64;
+							let i = if index < 0 { len + index } else { index };
+							if i < 0 || i >= len {
+								println!("Index out of bounds: {i} for {len}");
+								return Expression::falsy();
+							}
+							Expression::from(list[i as usize].clone())
+						}
+						_ => {
+							println!("Cannot index type: {obj:?}");
+							Expression::falsy()
+						}
+					}
+				}
 			},
 		}
 	}
@@ -461,34 +501,34 @@ pub enum YieldInstructionEnum {
 		name: String,
 		args: Vec<Expression>,
 	},
+	Index(String, Box<Atom>)
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InstructionEnum {
 	NoOp,
-	Print(Vec<ExpOrInstr>),
-	Type(Vec<ExpOrInstr>),
-	Input(Vec<TokenData>),
+	Print(Vec<Atom>),
+	Type(Vec<Atom>),
 	Wait {
-		amount: ExpOrInstr,
+		amount: Atom,
 		unit: TimeUnit,
 	},
 
 	// BLOCKS
 	Repeat {
 		scope_pointer: usize,
-		repeat_count: ExpOrInstr,
+		repeat_count: Atom,
 	},
 	For {
-		from: ExpOrInstr,
-		to: ExpOrInstr,
-		step: Option<ExpOrInstr>,
+		from: Atom,
+		to: Atom,
+		step: Option<Atom>,
 		name: String,
 		scope_pointer: usize,
 	},
 	ForIn {
 		name: String,
-		step: Option<ExpOrInstr>,
+		step: Option<Atom>,
 		varname: String,
 		scope_pointer: usize,
 	},
@@ -497,11 +537,11 @@ pub enum InstructionEnum {
 	},
 	IfBlock {
 		scope_pointer: usize,
-		condition: ExpOrInstr,
+		condition: Atom,
 	},
 	ElifBlock {
 		scope_pointer: usize,
-		condition: ExpOrInstr,
+		condition: Atom,
 	},
 	ElseBlock {
 		scope_pointer: usize,
@@ -515,12 +555,12 @@ pub enum InstructionEnum {
 	// BLOCKS
 	CallFunction {
 		name: String,
-		args: Vec<ExpOrInstr>,
+		args: Vec<Atom>,
 	},
-	VariableDeclaration(String, ExpOrInstr, AssignmentMethod),
+	VariableDeclaration(String, Atom, AssignmentMethod),
 	Break,
 	Continue,
-	Return(ExpOrInstr),
+	Return(Atom),
 }
 
 impl InstructionEnum {
@@ -565,7 +605,7 @@ impl InstructionEnum {
 		}
 	}
 
-	pub fn as_expression(&self) -> ExpOrInstr {
+	pub fn as_expression(&self) -> Atom {
 		match self {
 			InstructionEnum::IfBlock { condition, .. } => condition.clone(),
 			InstructionEnum::ElifBlock { condition, .. } => condition.clone(),

@@ -9,11 +9,10 @@ pub mod For;
 pub mod ForIn;
 pub mod Function;
 pub mod FunctionCall;
-pub mod FunctionCallYield;
+pub mod Yield;
+use Yield::*;
 pub mod If;
-pub mod Input;
 pub mod Print;
-pub mod Random;
 pub mod Repeat;
 pub mod Return;
 pub mod Type;
@@ -23,9 +22,9 @@ pub mod WhileTrue;
 pub mod Parsers {
 	use super::{
 		Break, Continue, Define, Elif, Else, For, ForIn, Function, FunctionCall, FunctionCallYield, If, Input, Print, Random, Repeat, Return, Type,
-		Wait, WhileTrue,
+		Wait, WhileTrue, Index
 	};
-	use crate::features::tokenizer::{AssignmentMethod, ExpOrInstr, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum};
+	use crate::features::tokenizer::{AssignmentMethod, Atom, InstructionEnum, TokenData, TokenTable, YieldInstructionEnum};
 	use crate::library::Types::{Object, ParameterData, RandomizerType};
 	use crate::util::ScopeManager::ScopeManager;
 	use chumsky::prelude::*;
@@ -78,15 +77,15 @@ pub mod Parsers {
 
 	pub fn yield_instruction_parser() -> Box<dyn Parser<TokenData, YieldInstructionEnum, Error = Simple<TokenData>>> {
 		Box::new(recursive(|instr_parser| {
-			choice([Input::parser(), Random::parser(), FunctionCallYield::parser()])
+			choice([Input::parser(), Random::parser(), FunctionCallYield::parser(), Index::parser()])
 		}))
 	}
 
-	pub fn value() -> Box<dyn Parser<TokenData, ExpOrInstr, Error = Simple<TokenData>>> {
+	pub fn value() -> Box<dyn Parser<TokenData, Atom, Error = Simple<TokenData>>> {
 		Box::new(
 			yield_instruction_parser()
-				.map(|x| ExpOrInstr::YieldInstruction(x))
-				.or(expression().map(|x| ExpOrInstr::Expression(x))),
+				.map(|x| Atom::YieldInstruction(x))
+				.or(atomic().map(|x| Atom::Expression(x))),
 		)
 	}
 
@@ -250,7 +249,7 @@ pub mod Parsers {
 	}
 
 	// FIXME: Fix parantheses support.
-	pub fn expression() -> impl Parser<TokenData, Expression, Error = Simple<TokenData>> {
+	pub fn atomic() -> impl Parser<TokenData, Expression, Error = Simple<TokenData>> {
 		let (paren_left, paren_right) = parens();
 
 		let expr = recursive(|expr| {
@@ -354,7 +353,7 @@ pub mod Parsers {
 			identifier()
 				.then_ignore(just(TokenTable::Colon.asTokenData()))
 				.then(main_types()) // TODO: Remove this and add support for object and such. For now this only supports the main types.
-				.then(just(TokenTable::AssignmentOperatorSet.asTokenData()).ignore_then(expression()).or_not())
+				.then(just(TokenTable::AssignmentOperatorSet.asTokenData()).ignore_then(atomic()).or_not())
 				.map(|((name, type_), default)| ParameterData {
 					name: name.asIdentifier(),
 					data_type: Some(type_),
@@ -371,7 +370,7 @@ pub mod Parsers {
 				.ignore_then(
 					just(TokenTable::LPAREN.asTokenData())
 						.ignore_then(just(TokenTable::MathOperatorMod.asTokenData()))
-						.ignore_then(expression())
+						.ignore_then(atomic())
 						.then_ignore(just(TokenTable::RPAREN.asTokenData()))
 						.or_not(),
 				)
